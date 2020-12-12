@@ -6,7 +6,7 @@ from collections import Counter
 from functools import reduce
 from operator import mul
 
-from .common import ngrams
+from autophrasex import utils
 
 CHAR_MODE = 'char'
 WORD_MODE = 'word'
@@ -14,20 +14,22 @@ WORD_MODE = 'word'
 
 class DocInfo:
 
-    def __init__(self, n=4, sep=' ', epsilon=1e-8):
+    def __init__(self, n=4, sep=' ', epsilon=0.0):
         self.N = n
         self.sep = sep
-        self.mode = CHAR_MODE if self.sep == '' else WORD_MODE
+        self.mode = CHAR_MODE if not self.sep else WORD_MODE
         self.epsilon = epsilon
         self.ngrams_freq = {}
         self.n_docs = 0
         self.docs_freq = Counter()
         self.ngrams_left_freq = {}
         self.ngrams_right_freq = {}
+        self._pmi_dict = {}
 
     @classmethod
     def from_corpus(cls, corpus_files, tokenize_fn, doc_process_fn=None, ngram_filter_fn=None, n=4, sep=' ', epsilon=1e-8, **kwargs):
         docinfo = cls(n=n, sep=sep, epsilon=epsilon)
+        no = 0
         for f in corpus_files:
             if not os.path.exists(f):
                 continue
@@ -36,15 +38,19 @@ class DocInfo:
                     line = fin.readline()
                     if not line:
                         break
+                    if doc_process_fn:
+                        line = doc_process_fn(line)
                     doc = tokenize_fn(line)
-                    docinfo.update(doc, doc_process_fn=doc_process_fn, ngram_filter_fn=ngram_filter_fn, **kwargs)
+                    docinfo.update(doc, ngram_filter_fn=ngram_filter_fn, **kwargs)
+
+                    no += 1
+                    if no % 1000 == 0:
+                        logging.info('Processed %d lines.', no)
             logging.info('Finished read corpus file: %s', f)
         logging.info('Finished read all corpus files.')
         return docinfo
 
-    def update(self, doc, doc_process_fn=None, ngram_filter_fn=None, **kwargs):
-        if doc_process_fn:
-            doc = doc_process_fn(doc)
+    def update(self, doc, ngram_filter_fn=None, **kwargs):
         if not doc:
             logging.warning('doc is empty or None.')
             return
@@ -55,10 +61,11 @@ class DocInfo:
         # record ngrams info
         for n in range(1, self.N + 1):
             nc = self.ngrams_freq.get(n, Counter())
-            for (start, end), window in ngrams(doc, n):
+            for (start, end), window in utils.ngrams(doc, n):
                 if ngram_filter_fn and ngram_filter_fn(list(window)):
                     continue
-                ngram = self.sep.join(window)
+                # ngram = self.sep.join(window)
+                ngram = ''.join(window)
                 nc[ngram] += 1
                 ngrams_in_doc.add(ngram)
 
@@ -83,30 +90,34 @@ class DocInfo:
     def _len_of_ngram(self, ngram):
         if self.mode == CHAR_MODE:
             return len(ngram)
-        return len(ngram.split(self.sep))
+        # return len(ngram.split(self.sep))
+        for n in range(1, self.N + 1):
+            if ngram in self.ngrams_freq[n]:
+                return n
+        return -1
 
     def _split_ngrams(self, ngram):
         if self.mode == CHAR_MODE:
             return ngram[:]
         return ngram.split(self.sep)
 
-    def ngrams(self, with_freq=True, with_n=False):
-        ngrams = []
+    def ngrams(self, with_freq=True, with_n=False, min_freq=0):
         for n in range(1, self.N + 1):
             if n not in self.ngrams_freq:
                 continue
             for k, v in self.ngrams_freq[n].items():
+                if v < min_freq:
+                    continue
                 item = [k]
                 if with_freq:
                     item.append(v)
                 if with_n:
                     item.append(n)
-                ngrams.append(tuple(item))
-        return ngrams
+                yield tuple(item)
 
     def ngram_freq_of(self, ngram):
         n = self._len_of_ngram(ngram)
-        if n not in self.ngrams_freq:
+        if n < 0:
             return 0
         return self.ngrams_freq[n].get(ngram, 0)
 
@@ -127,6 +138,8 @@ class DocInfo:
         return pmi
 
     def pmi_of(self, ngram):
+        if ngram in self._pmi_dict:
+            return self._pmi_dict[ngram]
         n = self._len_of_ngram(ngram)
         if n not in self.ngrams_freq:
             return 0.0
@@ -136,12 +149,15 @@ class DocInfo:
         return self._pmi_of(ngram, n, freq, unigram_total_occur, ngram_total_occur)
 
     def pmi(self):
+        if self._pmi_dict:
+            return self._pmi_dict
         pmi_dict = {}
         unigram_total_occur = sum(self.ngrams_freq[1].values())
         for n in range(2, self.N + 1):
             ngram_total_occur = sum(self.ngrams_freq[n].values())
             for ngram, freq in self.ngrams_freq[n].items():
                 pmi_dict[ngram] = self._pmi_of(ngram, n, freq, unigram_total_occur, ngram_total_occur)
+        self._pmi_dict = pmi_dict
         return dict(sorted(pmi_dict.items(), key=lambda x: -x[1]))
 
     def left_entropy_of(self, ngram):
@@ -176,7 +192,7 @@ class DocInfo:
 
     def inspect_of(self, ngram, with_left_counter=False, with_right_counter=False):
         n = self._len_of_ngram(ngram)
-        res =  {
+        res = {
             'pmi': self.pmi_of(ngram),
             'le': self.left_entropy_of(ngram),
             're': self.right_entropy_of(ngram),
@@ -191,10 +207,9 @@ class DocInfo:
         return res
 
     def inspect(self, with_left_counter=False, with_right_counter=False):
-        res = {}
         pmi = self.pmi()
         for ngram, n in self.ngrams(with_freq=False, with_n=True):
-            res[ngram] = {
+            values = {
                 'n': n,
                 'pmi': pmi.get(ngram, 0.0),
                 'le': self.left_entropy_of(ngram),
@@ -204,25 +219,45 @@ class DocInfo:
                 'doc_freq': self.docs_freq.get(ngram, 0),
             }
             if with_left_counter:
-                res['left_freq'] = dict(self.ngrams_left_freq.get(ngram, {}))
+                values['left_freq'] = dict(self.ngrams_left_freq.get(ngram, {}))
             if with_right_counter:
-                res['right_freq'] = dict(self.ngrams_right_freq.get(ngram, {}))
-        return res
+                values['right_freq'] = dict(self.ngrams_right_freq.get(ngram, {}))
+            yield ngram, values
 
-    def dump(self, output_file, with_left_counter=False, with_right_counter=False, verbose=False, log_steps=1000):
+    def _dump_meta_data(self, fp):
+        meta = {
+            'n': self.N,
+            'sep': self.sep,
+            'mode': self.mode,
+            'n_docs': self.n_docs,
+            'epsilon': self.epsilon
+        }
+        json.dump({'meta': meta}, fp)
+        fp.write('\n')
+
+    def _load_meta_data(self, fp):
+        meta = json.loads(fp.readline())
+        return meta['meta']
+
+    def dump(self, output_file, drop_sep=True, **kwargs):
         keys = self.ngrams(with_freq=False)
         logging.info('Number of ngrams: %d', len(keys))
         step, total = 0, len(keys)
         with open(output_file, mode='wt', encoding='utf8') as fout:
-            # write meta info 
-            meta = {'n': self.N, 'sep': self.sep, 'mode': self.mode, 'n_docs': self.n_docs, 'epsilon': self.epsilon}
-            json.dump({'meta': meta}, fout)
-            fout.write('\n')
+            # write meta info
+            self._dump_meta_data(fout)
 
             # write statistical info
-            for k, v in self.inspect(with_left_counter=with_left_counter, with_right_counter=with_right_counter).items():
-                if verbose and log_steps > 0 and (step + 1) % log_steps == 0:
-                    logging.info('Finished %d/%d', step+1, total)
+            with_left_counter = kwargs.get('with_left_counter', False)
+            with_right_counter = kwargs.get('with_right_counter', False)
+            verbose = kwargs.get('verbose', True)
+            log_steps = kwargs.get('log_steps', 1000)
+            for k, v in self.inspect(with_left_counter=with_left_counter, with_right_counter=with_right_counter):
                 step += 1
+                if verbose and log_steps > 0 and step % log_steps == 0:
+                    logging.info('Finished %d/%d', step+1, total)
+                # remove space
+                if drop_sep:
+                    k = ''.join([x for x in k.split(self.sep) if x.strip()])
                 json.dump({k: v}, fout, ensure_ascii=False)
                 fout.write('\n')
