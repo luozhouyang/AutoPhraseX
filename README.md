@@ -1,5 +1,10 @@
 # AutoPhraseX
 
+![Python package](https://github.com/luozhouyang/autophrasex/workflows/Python%20package/badge.svg)
+[![PyPI version](https://badge.fury.io/py/autophrasex.svg)](https://badge.fury.io/py/autophrasex)
+[![Python](https://img.shields.io/pypi/pyversions/autophrasex.svg?style=plastic)](https://badge.fury.io/py/autophrasex)
+
+
 Automated Phrase Mining from Massive Text Corpora in Python.
 
 实现思路参考 [shangjingbo1126/AutoPhrase](https://github.com/shangjingbo1126/AutoPhrase)，并不完全一致。
