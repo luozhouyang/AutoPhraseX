@@ -7,7 +7,7 @@
 
 Automated Phrase Mining from Massive Text Corpora in Python.
 
-实现思路参考 [shangjingbo1126/AutoPhrase](https://github.com/shangjingbo1126/AutoPhrase)，并不完全一致。
+实现思路参考 [shangjingbo1226/AutoPhrase](https://github.com/shangjingbo1226/AutoPhrase)，并不完全一致。
 
 ## 安装
 
