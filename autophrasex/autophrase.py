@@ -1,16 +1,12 @@
 import json
 import logging
 import os
-import random
-import re
 
 from sklearn.ensemble import RandomForestClassifier
 
 from . import utils
 from .strategy import AbstractStrategy
 from .tokenizer import BaiduLacTokenizer
-
-CHINESE_PATTERN = re.compile(r'^[0-9a-zA-Z\u4E00-\u9FA5]+$')
 
 
 def load_quality_phrase_files(input_files):
