@@ -3,10 +3,12 @@ import logging
 import os
 
 import jieba
+import opencc
 from LAC import LAC
 
 from . import utils
 
+converter = opencc.OpenCC('t2s.json')
 
 class AbstractTokenizer(abc.ABC):
 
@@ -26,6 +28,7 @@ class AbstractTokenizer(abc.ABC):
         return text
 
     def _traditional_to_simplified(self, text):
+        text = converter.convert(text) 
         return text
 
     def _to_lower(self, text):

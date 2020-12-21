@@ -2,3 +2,4 @@ naive_stopwords
 lac
 scikit-learn
 jieba
+opencc
