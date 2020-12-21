@@ -10,32 +10,33 @@ from . import utils
 
 converter = opencc.OpenCC('t2s.json')
 
+
 class AbstractTokenizer(abc.ABC):
 
     def tokenize(self, text, **kwargs):
         raise NotImplementedError()
 
     def _uniform_text(self, text, **kwargs):
-        to_simplified = kwargs.pop('to_simplified', True)
-        to_lower = kwargs.pop('to_lower', True)
-        to_half = kwargs.pop('to_half', True)
+        to_simplified = kwargs.get('to_simplified', True)
+        to_lower = kwargs.get('to_lower', True)
+        to_half = kwargs.get('to_half', True)
         if to_simplified:
             text = self._traditional_to_simplified(text)
         if to_half:
-            text = self._full_with_to_half(text)
+            text = self._full_width_to_half(text)
         if to_lower:
             text = self._to_lower(text)
         return text
 
     def _traditional_to_simplified(self, text):
-        text = converter.convert(text) 
+        text = converter.convert(text)
         return text
 
     def _to_lower(self, text):
         text = text.lower()
         return text
 
-    def _full_with_to_half(self, text):
+    def _full_width_to_half(self, text):
         text = "".join(utils.Q2B(x) for x in text)
         return text
 
@@ -74,6 +75,4 @@ class JiebaTokenizer(AbstractTokenizer):
 
     def tokenize(self, text, **kwargs):
         text = self._uniform_text(text)
-        cut_all = kwargs.pop('cut_all', False)
-        HMM = kwargs.pop('HMM', True)
-        return jieba.lcut(text, cut_all=cut_all, HMM=HMM)
+        return jieba.lcut(text, cut_all=kwargs.get('cut_all', False), HMM=kwargs.get('HMM', True))
