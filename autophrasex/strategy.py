@@ -101,6 +101,8 @@ class Strategy(AbstractStrategy):
     def select_frequent_phrases(self, **kwargs):
         candidates = []
         for n in range(1, self.ngrams_callback.N + 1):
+            if n >= len(self.ngrams_callback.ngrams_freq):
+                break
             counter = self.ngrams_callback.ngrams_freq[n]
             for k, v in counter.items():
                 if len(k) < self.phrase_min_length:
