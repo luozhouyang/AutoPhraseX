@@ -63,7 +63,7 @@ class AbstractStrategy:
         raise NotImplementedError()
 
 
-def default_phrase_filter_fn(phrase):
+def default_phrase_filter_fn(phrase, count):
     if any(phrase.endswith(x) for x in ['仅', '中']):
         return True
     return False
@@ -97,29 +97,33 @@ class Strategy(AbstractStrategy):
     def select_frequent_phrases(self, **kwargs):
         candidates = []
         for n in range(1, self.ngrams_callback.N + 1):
-            if n >= len(self.ngrams_callback.ngrams_freq):
-                break
             counter = self.ngrams_callback.ngrams_freq[n]
-            for k, v in counter.items():
-                if len(k) < self.phrase_min_length:
+            for phrase, count in counter.items():
+                phrase = ''.join(phrase.split(' '))
+                if self._filter_phrase(phrase, count, **kwargs):
                     continue
-                if v < self.phrase_min_freq:
-                    continue
-                if self.phrase_drop_stopwords and any(utils.STOPWORDS.contains(x) for x in k):
-                    continue
-                if self.phrase_filter_fn(k):
-                    continue
-                candidates.append((k, v))
+                candidates.append((phrase, count))
 
         if self.phrase_drop_verbs:
             candidates = self._drop_verbs(candidates)
         candidates = sorted(candidates, key=lambda x: x[1], reverse=True)
         return [x[0] for x in candidates[:self.phrase_max_count]]
 
+    def _filter_phrase(self, phrase, count, **kwargs):
+        if len(phrase) < self.phrase_min_length:
+            return True
+        if count < self.phrase_min_freq:
+            return True
+        if self.phrase_drop_stopwords and any(utils.STOPWORDS.contains(x) for x in phrase):
+            return True
+        if self.phrase_filter_fn(phrase, count):
+            return True
+        return False
+
     def _drop_verbs(self, candidates):
         predictions = []
         for i in range(0, len(candidates), 100):
-            batch_count = [x[1] for x in candidates[i:i+100]]
+            # batch_count = [x[1] for x in candidates[i:i+100]]
             batch_texts = [x[0] for x in candidates[i:i+100]]
             batch_preds = self.lac.run(batch_texts)
             predictions.extend(batch_preds)
@@ -134,11 +138,12 @@ class Strategy(AbstractStrategy):
     def build_phrase_pool(self, quality_phrases, frequent_phrases, **kwargs):
         pos_pool, neg_pool = [], []
         for p in frequent_phrases:
+            _p = ''.join(p.split(' '))
             # unigrams are positve phrase
-            if p in self.ngrams_callback.ngrams_freq[1] and len(p) > self.phrase_min_unigram_length:
+            if _p in self.ngrams_callback.ngrams_freq[1] and len(_p) > self.phrase_min_unigram_length:
                 pos_pool.append(p)
                 continue
-            if p in quality_phrases:
+            if _p in quality_phrases:
                 if len(p) > self.phrase_min_unigram_length:
                     pos_pool.append(p)
             else:
@@ -149,10 +154,8 @@ class Strategy(AbstractStrategy):
         x, y = [], []
         examples = []
         for p in pos_pool:
-            p = ' '.join(self.tokenizer.tokenize(p))
             examples.append((self.build_input_features(p), 1))
         for p in neg_pool:
-            p = ' '.join(self.tokenizer.tokenize(p))
             examples.append((self.build_input_features(p), 0))
         # shuffle
         random.shuffle(examples)
@@ -165,7 +168,7 @@ class Strategy(AbstractStrategy):
         new_pos_pool, new_neg_pool = [], []
         new_pos_pool.extend(pos_pool)
 
-        input_features = [self.build_input_features(' '.join(self.tokenizer.tokenize(x, **kwargs))) for x in neg_pool]
+        input_features = [self.build_input_features(x) for x in neg_pool]
         pos_probs = [prob[1] for prob in classifier.predict_proba(input_features)]
         pairs = [(p, prob) for p, prob in zip(neg_pool, pos_probs)]
         pairs = sorted(pairs, key=lambda x: x[1], reverse=True)

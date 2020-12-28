@@ -63,27 +63,16 @@ class CallbackWrapper(AbstractCallback):
 
 class NgramsCallback(AbstractCallback):
 
-    def __init__(self, n=4, epsilon=0.0):
+    def __init__(self, n=4, ngram_filter_fn=None, epsilon=0.0, **kwargs):
         self.epsilon = epsilon
         self.N = n
-        self.ngrams_freq = {}
+        self.ngrams_freq = {n: Counter() for n in range(1, self.N + 1)}
+        self.ngram_filter_fn = ngram_filter_fn or default_ngram_filter_fn
 
     def update_ngrams(self, start, end, ngram, n, **kwargs):
-        filter_fn = kwargs.get('ngram_filter_fn', default_ngram_filter_fn)
-        if filter_fn(ngram):
+        if self.ngram_filter_fn(ngram):
             return
-
-        nc = self.ngrams_freq.get(n, Counter())
-        k = ''.join(list(ngram))
-        nc[k] += 1
-        self.ngrams_freq[n] = nc
-
-    def _pmi_of(self, ngram, n, freq, unigram_total_occur, ngram_total_occur):
-        joint_prob = freq / (ngram_total_occur + self.epsilon)
-        indep_prob = reduce(
-            mul, [self.ngrams_freq[1][unigram] for unigram in ngram.split(' ')]) / (unigram_total_occur ** n)
-        pmi = math.log((joint_prob + self.epsilon) / (indep_prob + self.epsilon), 2)
-        return pmi
+        self.ngrams_freq[n][' '.join(ngram)] += 1
 
     def pmi_of(self, ngram):
         """Get the PMI of ngram.
@@ -98,27 +87,33 @@ class NgramsCallback(AbstractCallback):
             return 0.0
 
         unigram_total_occur = sum(self.ngrams_freq[1].values())
-        ngram_total_occur = sum(self.ngrams_freq[n].values())
-        freq = self.ngrams_freq[n].get(''.join(ngram.split(' ')), 0)
-        return self._pmi_of(ngram, n, freq, unigram_total_occur, ngram_total_occur)
 
-    def pmi(self):
-        pmi_dict = {}
-        unigram_total_occur = sum(self.ngrams_freq[1].values())
-        for n in range(2, self.N + 1):
-            ngram_total_occur = sum(self.ngrams_freq[n].values())
-            for ngram, freq in self.ngrams_freq[n].items():
-                pmi_dict[ngram] = self._pmi_of(ngram, n, freq, unigram_total_occur, ngram_total_occur)
-        return dict(sorted(pmi_dict.items(), key=lambda x: -x[1]))
+        def _joint_prob(x):
+            ngram_freq = self.ngrams_freq[n].get(x, 0) + self.epsilon
+            total_freq = sum(self.ngrams_freq[n].values()) + self.epsilon
+            return ngram_freq / total_freq
+
+        def _unigram_prob(x):
+            unigram_prob = (self.ngrams_freq[1][x] + self.epsilon) / (unigram_total_occur + self.epsilon)
+            return unigram_prob
+
+        def _indep_prob(x):
+            return reduce(mul, [_unigram_prob(unigram) for unigram in x.split(' ')])
+
+        joint_prob = _joint_prob(ngram)
+        indep_prob = _indep_prob(ngram)
+        pmi = math.log(joint_prob / indep_prob, 2)
+        return pmi
 
 
 class IDFCallback(AbstractCallback):
 
-    def __init__(self, epsilon=0.0):
+    def __init__(self, ngram_filter_fn=None, epsilon=0.0):
         self.n_docs = 0
         self.docs_freq = Counter()
         self.ngram_in_doc = set()
         self.epsilon = epsilon
+        self.ngram_filter_fn = ngram_filter_fn or default_ngram_filter_fn
 
     def on_process_doc_begin(self):
         self.ngram_in_doc.clear()
@@ -127,11 +122,9 @@ class IDFCallback(AbstractCallback):
         self.n_docs += 1
 
     def update_ngrams(self, start, end, ngram, n, **kwargs):
-        filter_fn = kwargs.get('ngram_filter_fn', default_ngram_filter_fn)
-        if filter_fn(ngram):
+        if self.ngram_filter_fn(ngram):
             return
-
-        ngram = ''.join(list(ngram))
+        ngram = ' '.join(list(ngram))
         self.ngram_in_doc.add(ngram)
 
     def on_process_doc_end(self):
@@ -139,18 +132,33 @@ class IDFCallback(AbstractCallback):
             self.docs_freq[gram] += 1
 
     def doc_freq_of(self, ngram):
-        ngram = ''.join(ngram.split(' '))
+        """Get doc frequence of ngram.
+
+        Args:
+            ngram: Python String, ' ' joined phrase.
+
+        Returns:
+            Python integer, document frequence of ngram
+        """
         return self.docs_freq.get(ngram, 0)
 
     def idf_of(self, ngram):
-        ngram = ''.join(ngram.split(' '))
+        """Get IDF of ngram.
+
+        Args:
+            ngram: Python String, ' ' joined phrase.
+
+        Returns:
+            Python float, IDF of ngram
+        """
         return math.log((self.n_docs + self.epsilon) / (self.docs_freq.get(ngram, 0) + self.epsilon))
 
 
 class EntropyCallback(AbstractCallback):
 
-    def __init__(self, epsilon=0.0):
+    def __init__(self, ngram_filter_fn=None, epsilon=0.0):
         self.epsilon = epsilon
+        self.ngram_filter_fn = ngram_filter_fn or default_ngram_filter_fn
         self.ngrams_left_freq = {}
         self.ngrams_right_freq = {}
         self.current_tokens = None
@@ -159,39 +167,42 @@ class EntropyCallback(AbstractCallback):
         self.current_tokens = tokens
 
     def update_ngrams(self, start, end, ngram, n, **kwargs):
-        filter_fn = kwargs.get('ngram_filter_fn', default_ngram_filter_fn)
-        if filter_fn(ngram):
+        if self.ngram_filter_fn(ngram):
             return
 
         # left entropy
         if start > 0:
-            k = ''.join(list(ngram))
+            k = ' '.join(list(ngram))
             lc = self.ngrams_left_freq.get(k, Counter())
             lc[self.current_tokens[start - 1]] += 1
             self.ngrams_left_freq[ngram] = lc
         # right entropy
         if end < len(self.current_tokens):
-            k = ''.join(list(ngram))
+            k = ' '.join(list(ngram))
             rc = self.ngrams_right_freq.get(k, Counter())
             rc[self.current_tokens[end]] += 1
             self.ngrams_right_freq[ngram] = rc
 
+    def _entropy(self, c, total):
+        entropy = 0.0
+        for k in c.keys():
+            prob = (c[k] + self.epsilon) / (total + self.epsilon)
+            log_prob = math.log(prob, 2)
+            entropy += prob * log_prob
+        return -1.0 * entropy
+
     def left_entropy_of(self, ngram):
-        ngram = ''.join(ngram.split(' '))
         if ngram not in self.ngrams_left_freq:
             return 0.0
-        n_left_occur = sum(self.ngrams_left_freq[ngram].values())
-        lc = self.ngrams_left_freq[ngram]
-        le = -1 * sum([lc[word] / (n_left_occur + self.epsilon) * math.log(
-            lc[word] / (n_left_occur + self.epsilon), 2) for word in lc.keys()])
-        return le
+        c = self.ngrams_left_freq[ngram]
+        total = sum(c.values())
+        entropy = self._entropy(c, total)
+        return entropy
 
     def right_entropy_of(self, ngram):
-        ngram = ''.join(ngram.split(' '))
         if ngram not in self.ngrams_right_freq:
             return 0.0
-        n_right_occur = sum(self.ngrams_right_freq[ngram].values())
-        rc = self.ngrams_right_freq[ngram]
-        re = -1 * sum([rc[word] / (n_right_occur + self.epsilon) * math.log(
-            rc[word] / (n_right_occur + self.epsilon), 2) for word in rc.keys()])
-        return re
+        c = self.ngrams_right_freq[ngram]
+        total = sum(c.values())
+        entropy = self._entropy(c, total)
+        return entropy
