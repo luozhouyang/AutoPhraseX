@@ -57,6 +57,9 @@ class AbstractStrategy:
     def build_phrase_pool(self, quality_phrases, frequent_phrases, **kwargs):
         raise NotImplementedError()
 
+    def filter_pools(self, pos_pool, neg_pool):
+        raise NotImplementedError()
+
     def compose_training_data(self, pos_pool, neg_pool, **kwargs):
         raise NotImplementedError()
 
@@ -101,9 +104,9 @@ class Strategy(AbstractStrategy):
     def select_frequent_phrases(self, **kwargs):
         candidates = []
         for n in range(1, self.ngrams_callback.N + 1):
-            if n >= len(self.ngrams_callback.ngrams_freq):
-                break
-            counter = self.ngrams_callback.ngrams_freq[n]
+            counter = self.ngrams_callback.ngrams_freq.get(n, None)
+            if counter is None:
+                continue
             for k, v in counter.items():
                 if len(k) < self.phrase_min_length:
                     continue
@@ -148,6 +151,31 @@ class Strategy(AbstractStrategy):
             else:
                 neg_pool.append(p)
         return pos_pool, neg_pool
+
+    def filter_pools(self, pos_pool, neg_pool):
+        new_pos_pool = pos_pool.copy()
+        new_neg_pool = neg_pool.copy()
+        for p in pos_pool:
+            seglist = self.tokenizer.tokenize(p)
+            key = len(seglist)
+            counter = self.ngrams_callback.ngrams_freq.get(key,None)
+            if counter is None:
+                print("following pos-ngram not in self.ngrams_callback.ngrams_freq:")
+                print(seglist)
+                if p in new_pos_pool:
+                    new_pos_pool.remove(p)
+                continue
+        for p in neg_pool:
+            seglist = self.tokenizer.tokenize(p)
+            key = len(seglist)
+            counter = self.ngrams_callback.ngrams_freq.get(key,None)
+            if counter is None:
+                print("following neg-ngram not in self.ngrams_callback.ngrams_freq:")
+                print(seglist)
+                if p in new_neg_pool:
+                    new_neg_pool.remove(p)
+                continue
+        return new_pos_pool,new_neg_pool
 
     def compose_training_data(self, pos_pool, neg_pool, **kwargs):
         x, y = [], []

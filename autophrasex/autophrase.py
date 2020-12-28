@@ -41,6 +41,10 @@ class AutoPhrase:
         # TODO: 第一次构建正负池的时候，把unigrams作为正样本
         # TODO: 观察训练过程，调整threshold_schedule_factor的值，有可能需要小于1
 
+        initial_pos_pool, initial_neg_pool = strategy.filter_pools(initial_pos_pool, initial_neg_pool)
+        logging.info('valid size of initial positive pool: %d', len(initial_pos_pool))
+        logging.info('valid size of initial negative pool: %d', len(initial_neg_pool))
+
         pos_pool, neg_pool = initial_pos_pool, initial_neg_pool
         for epoch in range(kwargs.pop('epochs', 5)):
             logging.info('Starting to train model at epoch %d ...', epoch + 1)
