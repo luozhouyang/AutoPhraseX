@@ -39,6 +39,28 @@ class AbstractCallback(abc.ABC):
         pass
 
 
+class CallbackWrapper(AbstractCallback):
+
+    def __init__(self, callbacks=None):
+        self.callbacks = callbacks or []
+
+    def on_process_doc_begin(self):
+        for cb in self.callbacks:
+            cb.on_process_doc_begin()
+
+    def update_tokens(self, tokens, **kwargs):
+        for cb in self.callbacks:
+            cb.update_tokens(tokens, **kwargs)
+
+    def update_ngrams(self, start, end, ngram, n, **kwargs):
+        for cb in self.callbacks:
+            cb.update_ngrams(start, end, ngram, n, **kwargs)
+
+    def on_process_doc_end(self):
+        for cb in self.callbacks:
+            cb.on_process_doc_end()
+
+
 class NgramsCallback(AbstractCallback):
 
     def __init__(self, n=4, epsilon=0.0):

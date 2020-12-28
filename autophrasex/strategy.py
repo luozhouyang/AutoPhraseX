@@ -6,14 +6,15 @@ import random
 from LAC import LAC
 
 from . import utils
-from .callbacks import EntropyCallback, IDFCallback, NgramsCallback
+from .callbacks import (CallbackWrapper, EntropyCallback, IDFCallback,
+                        NgramsCallback)
 
 
 class AbstractStrategy:
 
     def __init__(self, tokenizer, callbacks=None, **kwargs):
         self.tokenizer = tokenizer
-        self.callbacks = callbacks or []
+        self.callback = CallbackWrapper(callbacks=callbacks)
 
     def fit(self, input_doc_files, N=4, **kwargs):
         num = 0
@@ -28,21 +29,16 @@ class AbstractStrategy:
                         continue
 
                     # callbacks process doc begin
-                    for callback in self.callbacks:
-                        callback.on_process_doc_begin()
-
+                    self.callback.on_process_doc_begin()
                     tokens = self.tokenizer.tokenize(line, **kwargs)
                     # callbacks process tokens
-                    for callback in self.callbacks:
-                        callback.update_tokens(tokens, **kwargs)
+                    self.callback.update_tokens(tokens, **kwargs)
                     # callbacks process ngrams
                     for n in range(1, N + 1):
                         for (start, end), window in utils.ngrams(tokens, n=n):
-                            for callback in self.callbacks:
-                                callback.update_ngrams(start, end, window, n, **kwargs)
+                            self.callback.update_ngrams(start, end, window, n, **kwargs)
                     # callbacks process doc end
-                    for callback in self.callbacks:
-                        callback.on_process_doc_end()
+                    self.callback.on_process_doc_end()
 
                     num += 1
                     if num % 1000 == 0:
