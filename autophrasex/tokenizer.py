@@ -61,6 +61,7 @@ class BaiduLacTokenizer(AbstractTokenizer):
     def tokenize(self, text, **kwargs):
         text = self._uniform_text(text, **kwargs)
         results = self.lac.run(text)
+        results = [x.strip() for x in results if x.strip()]
         return results
 
 
@@ -75,4 +76,6 @@ class JiebaTokenizer(AbstractTokenizer):
 
     def tokenize(self, text, **kwargs):
         text = self._uniform_text(text)
-        return jieba.lcut(text, cut_all=kwargs.get('cut_all', False), HMM=kwargs.get('HMM', True))
+        result = jieba.lcut(text, cut_all=kwargs.get('cut_all', False), HMM=kwargs.get('HMM', True))
+        result = [x.strip() for x in result if x.strip()]
+        return result
