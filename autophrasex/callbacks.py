@@ -15,13 +15,14 @@ CHARACTERS = set('!"#$%&\'()*+,-./:;?@[\\]^_`{|}~ \t\n\r\x0b\x0c，。？：“�
 
 
 def default_ngram_filter_fn(ngrams):
-    if any(x in CHARACTERS for x in ngrams):
-        return True
-    if any(utils.STOPWORDS.contains(x) for x in ngrams):
-        return True
-    if CHINESE_PATTERN.match(''.join(ngrams)):
-        return False
-    return True
+    # if any(x in CHARACTERS for x in ngrams):
+    #     return True
+    # if any(utils.STOPWORDS.contains(x) for x in ngrams):
+    #     return True
+    # if CHINESE_PATTERN.match(''.join(ngrams)):
+    #     return False
+    # return True
+    return False
 
 
 class AbstractCallback(abc.ABC):
