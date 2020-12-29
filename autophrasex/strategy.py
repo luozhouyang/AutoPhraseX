@@ -10,6 +10,29 @@ from .callbacks import (CallbackWrapper, EntropyCallback, IDFCallback,
                         NgramsCallback)
 
 
+def read_input_files(input_files, callback=None, log_steps=1000):
+    if isinstance(input_files, str):
+        input_files = [input_files]
+    num = 0
+    for f in input_files:
+        if not os.path.exists(f):
+            logging.warning('File %s does not exist.', f)
+            continue
+        with open(f, mode='rt', encoding='utf8') as fin:
+            for line in fin:
+                line = line.rstrip('\n')
+                if not line:
+                    continue
+                if callback:
+                    callback(line)
+                num += 1
+                if num % log_steps == 0:
+                    logging.info('Finished to process %d lines.', num)
+        logging.info('Finished to process %d lines in total of file: %s', num, f)
+    logging.info('Finished to process %d lines in total of all files.', num)
+    logging.info('Done!')
+
+
 class AbstractStrategy:
 
     def __init__(self, tokenizer, callbacks=None, **kwargs):
@@ -17,35 +40,21 @@ class AbstractStrategy:
         self.callback = CallbackWrapper(callbacks=callbacks)
 
     def fit(self, input_doc_files, N=4, **kwargs):
-        num = 0
-        for f in input_doc_files:
-            if not os.path.exists(f):
-                logging.warning('File %s does not exist.', f)
-                continue
-            with open(f, mode='rt', encoding='utf8') as fin:
-                for line in fin:
-                    line = line.rstrip('\n')
-                    if not line:
-                        continue
 
-                    # callbacks process doc begin
-                    self.callback.on_process_doc_begin()
-                    tokens = self.tokenizer.tokenize(line, **kwargs)
-                    # callbacks process tokens
-                    self.callback.update_tokens(tokens, **kwargs)
-                    # callbacks process ngrams
-                    for n in range(1, N + 1):
-                        for (start, end), window in utils.ngrams(tokens, n=n):
-                            self.callback.update_ngrams(start, end, window, n, **kwargs)
-                    # callbacks process doc end
-                    self.callback.on_process_doc_end()
+        def read_line(line):
+            # callbacks process doc begin
+            self.callback.on_process_doc_begin()
+            tokens = self.tokenizer.tokenize(line, **kwargs)
+            # callbacks process tokens
+            self.callback.update_tokens(tokens, **kwargs)
+            # callbacks process ngrams
+            for n in range(1, N + 1):
+                for (start, end), window in utils.ngrams(tokens, n=n):
+                    self.callback.update_ngrams(start, end, window, n, **kwargs)
+            # callbacks process doc end
+            self.callback.on_process_doc_end()
 
-                    num += 1
-                    if num % 1000 == 0:
-                        logging.info('Finished to process %d lines.', num)
-            logging.info('Finished to process %d lines in total of file: %s', num, f)
-        logging.info('Finished to process %d lines in total of all files.', num)
-        logging.info('Done!')
+        read_input_files(input_doc_files, callback=read_line, log_steps=kwargs.get('log_steps', 1000))
 
     def select_frequent_phrases(self, **kwargs):
         raise NotImplementedError()
@@ -87,9 +96,9 @@ class Strategy(AbstractStrategy):
         self.phrase_drop_verbs = kwargs.get('phrase_drop_verbs', True)
         if self.phrase_drop_verbs:
             self.lac = LAC()
-        self.threshold = kwargs.get('threshold', 0.45)
-        self.threshold_schedule = kwargs.get('threshold_schedule', True)
-        self.threshold_schedule_factor = kwargs.get('threshold_schedule_factor', 1.0)
+        self.prob_threshold = kwargs.get('prob_threshold', 0.45)
+        self.prob_threshold_schedule_factor = kwargs.get('prob_threshold_schedule_factor', 1.0)
+        self.prob_topk = kwargs.get('prob_topk', 10)
         self.min_delta = kwargs.get('min_delta', 3)
 
         self.features_cache = {}
@@ -99,8 +108,8 @@ class Strategy(AbstractStrategy):
         for n in range(1, self.ngrams_callback.N + 1):
             counter = self.ngrams_callback.ngrams_freq[n]
             for phrase, count in counter.items():
-                phrase = ''.join(phrase.split(' '))
-                if self._filter_phrase(phrase, count, **kwargs):
+                _phrase = ''.join(phrase.split(' '))
+                if self._filter_phrase(_phrase, count, **kwargs):
                     continue
                 candidates.append((phrase, count))
 
@@ -176,19 +185,18 @@ class Strategy(AbstractStrategy):
 
         threshold = self._schedule_threshold(epoch, **kwargs)
         logging.info('\t using threshold: %f', threshold)
-        for p, prob in pairs:
+
+        for idx, (p, prob) in enumerate(pairs):
             if prob > threshold:
                 new_pos_pool.append(p)
-            else:
-                new_neg_pool.append(p)
+                continue
+            new_neg_pool.append(p)
 
         stop = True if len(new_pos_pool) - len(pos_pool) < self.min_delta else False
         return new_pos_pool, new_neg_pool, stop
 
     def _schedule_threshold(self, epoch, **kwargs):
-        if not self.threshold_schedule:
-            return self.threshold
-        threshold = min(self.threshold * self.threshold_schedule_factor**epoch, 0.95)
+        threshold = min(self.prob_threshold * self.prob_threshold_schedule_factor**epoch, 0.95)
         return threshold
 
     def build_input_features(self, phrase, **kwargs):
@@ -212,7 +220,7 @@ class Strategy(AbstractStrategy):
         left_entropy = self.entropy_callback.left_entropy_of(phrase)
         right_entropy = self.entropy_callback.right_entropy_of(phrase)
         features = {
-            'unigram': 1 if len(ngrams) == 0 else 0,
+            'unigram': 1 if len(ngrams) == 1 else 0,
             'freq': freq,
             'doc_freq': doc_freq,
             'idf': idf,
