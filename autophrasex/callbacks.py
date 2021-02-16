@@ -176,13 +176,13 @@ class EntropyCallback(AbstractCallback):
             k = ' '.join(list(ngram))
             lc = self.ngrams_left_freq.get(k, Counter())
             lc[self.current_tokens[start - 1]] += 1
-            self.ngrams_left_freq[ngram] = lc
+            self.ngrams_left_freq[k] = lc
         # right entropy
         if end < len(self.current_tokens):
             k = ' '.join(list(ngram))
             rc = self.ngrams_right_freq.get(k, Counter())
             rc[self.current_tokens[end]] += 1
-            self.ngrams_right_freq[ngram] = rc
+            self.ngrams_right_freq[k] = rc
 
     def _entropy(self, c, total):
         entropy = 0.0
