@@ -4,52 +4,57 @@ import unittest
 import jieba
 from autophrasex import utils
 from autophrasex.autophrase import AutoPhrase
-from autophrasex.strategy import Strategy
+from autophrasex.callbacks import *
+from autophrasex.composer import DefaultFeatureComposer
+from autophrasex.reader import DefaultCorpusReader
+from autophrasex.selector import DefaultPhraseSelector
 from autophrasex.tokenizer import BaiduLacTokenizer, JiebaTokenizer
 
 
 class AutoPhraseTest(unittest.TestCase):
 
     def test_autophrase_small(self):
-        tokenizer = BaiduLacTokenizer()
-        # tokenizer = JiebaTokenizer()
-        strategy = Strategy(
-            tokenizer=tokenizer,
-            N=4,
-            epsilon=1e-6,
-            prob_threshold=0.25,
-            prob_threshold_schedule_factor=1.0)
-        ap = AutoPhrase()
-        predictions = ap.mine(
-            input_doc_files=['data/sogou_news_tensite_content.100.txt'],
-            quality_phrase_files='data/wiki_quality.txt',
-            strategy=strategy,
-            N=4,
-            epochs=10,
-        )
-        for p in predictions:
-            print(p)
+        N = 4
+        ngrams_callback = NgramsCallback(n=N)
+        idf_callback = IDFCallback()
+        entropy_callback = EntropyCallback()
+
+        reader = DefaultCorpusReader(
+            tokenizer=BaiduLacTokenizer(),
+            callbacks=[ngrams_callback, idf_callback, entropy_callback])
+        reader.read(corpus_files=['data/corpus.txt'], N=N, verbose=True, logsteps=500)
+
+        autophrase = AutoPhrase(
+            selector=DefaultPhraseSelector(ngrams_callback=ngrams_callback),
+            composer=DefaultFeatureComposer(
+                idf_callback=idf_callback,
+                ngrams_callbak=ngrams_callback,
+                entropy_callback=entropy_callback))
+
+        predictions = autophrase.mine()
+        for pred in predictions:
+            print(pred)
 
     def test_autophrase_large(self):
-        # tokenizer = BaiduLacTokenizer()
-        tokenizer = JiebaTokenizer()
-        strategy = Strategy(
-            tokenizer=tokenizer,
-            N=4,
-            epsilon=1e-6,
-            prob_threshold=0.45,
-            prob_threshold_schedule_factor=1.05,
-            phrase_min_freq=2,
-            phrase_max_count=1000)
+        N = 4
+        ngrams_callback = NgramsCallback(n=N)
+        idf_callback = IDFCallback()
+        entropy_callback = EntropyCallback()
 
-        ap = AutoPhrase()
-        predictions = ap.mine(
-            input_doc_files=['data/sogou_news_tensite_content.10000.txt'],
-            quality_phrase_files=['data/wiki_quality.txt', 'data/quality_pred.txt'],
-            strategy=strategy,
-            N=4,
-            epochs=10,
+        reader = DefaultCorpusReader(
+            tokenizer=BaiduLacTokenizer(),
+            callbacks=[ngrams_callback, idf_callback, entropy_callback])
+        reader.read(corpus_files=['data/corpus.txt'], N=N, verbose=True, logsteps=500)
+
+        autophrase = AutoPhrase(
+            selector=DefaultPhraseSelector(ngrams_callback=ngrams_callback),
+            composer=DefaultFeatureComposer(
+                idf_callback=idf_callback,
+                ngrams_callbak=ngrams_callback,
+                entropy_callback=entropy_callback),
         )
+        predictions = autophrase.mine()
+
         with open('data/predictions.txt', mode='wt', encoding='utf8') as fout:
             for n, p in predictions:
                 fout.write('{}, {}\n'.format(n, p))

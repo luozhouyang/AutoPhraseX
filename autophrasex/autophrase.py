@@ -1,11 +1,15 @@
 import json
 import logging
 import os
+import random
 
 from sklearn.ensemble import RandomForestClassifier
 
 from . import utils
-from .strategy import AbstractStrategy
+from .callbacks import EntropyCallback, IDFCallback, NgramsCallback
+from .composer import AbstractFeatureComposer, DefaultFeatureComposer
+from .reader import AbstractCorpusReader, DefaultCorpusReader
+from .selector import AbstractPhraseSelector, DefaultPhraseSelector
 from .tokenizer import BaiduLacTokenizer
 
 
@@ -21,35 +25,35 @@ def load_quality_phrase_files(input_files):
 
 class AutoPhrase:
 
-    def __init__(self, **kwargs):
-        max_depth = kwargs.pop('max_depth', 6)
-        n_jobs = kwargs.pop('n_jobs', 6)
-        self.classifier = RandomForestClassifier(max_depth=max_depth, n_jobs=n_jobs)
+    def __init__(self, selector: AbstractPhraseSelector, composer: AbstractFeatureComposer, **kwargs):
+        self.selector = selector
+        self.composer = composer
+        self.classifier = RandomForestClassifier(**kwargs)
+        self.threshold = 0.4
+        self.early_stop = None
 
-    def mine(self, input_doc_files, quality_phrase_files, strategy: AbstractStrategy, N=4, **kwargs):
-        strategy.fit(input_doc_files, N=N, **kwargs)
+    def mine(self, quality_phrase_files, **kwargs):
 
         quality_phrases = load_quality_phrase_files(quality_phrase_files)
         logging.info('Load quality phrases finished. There are %d quality phrases in total.', len(quality_phrases))
 
-        frequent_phrases = strategy.select_frequent_phrases(**kwargs)
+        frequent_phrases = self.selector.select(**kwargs)
+
         logging.info('Selected %d frequent phrases.', len(frequent_phrases))
 
-        initial_pos_pool, initial_neg_pool = strategy.build_phrase_pool(quality_phrases, frequent_phrases, **kwargs)
+        initial_pos_pool, initial_neg_pool = self._organize_phrase_pools(quality_phrases, frequent_phrases, **kwargs)
         logging.info('Size of initial positive pool: %d', len(initial_pos_pool))
         logging.info('Size of initial negative pool: %d', len(initial_neg_pool))
-        # TODO: 第一次构建正负池的时候，把unigrams作为正样本
-        # TODO: 观察训练过程，调整threshold_schedule_factor的值，有可能需要小于1
 
         pos_pool, neg_pool = initial_pos_pool, initial_neg_pool
         for epoch in range(kwargs.pop('epochs', 5)):
             logging.info('Starting to train model at epoch %d ...', epoch + 1)
-            x, y = strategy.compose_training_data(pos_pool, neg_pool, **kwargs)
+            x, y = self._prepare_training_data(pos_pool, neg_pool, **kwargs)
             self.classifier.fit(x, y)
             logging.info('Finished to train model at epoch %d', epoch + 1)
 
             logging.info('Starting to adjust phrase pool...')
-            pos_pool, neg_pool, stop = strategy.adjust_phrase_pool(pos_pool, neg_pool, self.classifier, epoch, **kwargs)
+            pos_pool, neg_pool, stop = self._reorganize_phrase_pools(pos_pool, neg_pool, **kwargs)
             logging.info('Finished to djusted phrase pools. ')
             logging.info('\t size of positive pool: %d, size of ngeative pool: %d', len(pos_pool), len(neg_pool))
             if stop:
@@ -57,8 +61,56 @@ class AutoPhrase:
                 break
 
         logging.info('Finished to train model!')
-        features = [strategy.build_input_features(p) for p in initial_neg_pool]
-        pos_probas = [prob[1] for prob in self.classifier.predict_proba(features)]
-        predictions = [(p, prob) for p, prob in zip(initial_neg_pool, pos_probas)]
+        predictions = self._predict_proba(initial_neg_pool)
         predictions = sorted(predictions, key=lambda x: x[1], reverse=True)
         return predictions
+
+    def _prepare_training_data(self, pos_pool, neg_pool, **kwargs):
+        x, y = [], []
+        examples = []
+        for p in pos_pool:
+            examples.append((self.composer.compose(p), 1))
+        for p in neg_pool:
+            examples.append((self.composer.compose(p), 0))
+        # shuffle
+        random.shuffle(examples)
+        for _x, _y in examples:
+            x.append(_x)
+            y.append(_y)
+        return x, y
+
+    def _reorganize_phrase_pools(self, pos_pool, neg_pool, **kwargs):
+        new_pos_pool, new_neg_pool = [], []
+        new_pos_pool.extend(pos_pool.clone())
+
+        pairs = self._predict_proba(neg_pool)
+        pairs = sorted(pairs, key=lambda x: x[1], reverse=True)
+        print(pairs[:10])
+
+        for idx, (p, prob) in enumerate(pairs):
+            if prob > self.threshold:
+                new_pos_pool.append(p)
+                continue
+            new_neg_pool.append(p)
+
+        return new_pos_pool, new_neg_pool
+
+    def _organize_phrase_pools(self, quality_phrases, frequent_phrases, **kwargs):
+        pos_pool, neg_pool = [], []
+        for p in frequent_phrases:
+            _p = ''.join(p.split(' '))
+            if _p in quality_phrases:
+                pos_pool.append(p)
+            else:
+                neg_pool.append(p)
+        return pos_pool, neg_pool
+
+    def _predict_proba(self, phrases):
+        features = [self.composer.compose(x) for x in phrases]
+        pos_probs = [prob[1] for prob in self.classifier.predict_proba(features)]
+        pairs = [(phrase, prob) for phrase, prob in zip(phrases, pos_probs)]
+        return pairs
+
+
+if __name__ == "__main__":
+    pass
