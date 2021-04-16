@@ -63,7 +63,7 @@ class VerbPhraseFilter(AbstractPhraseFilter):
         predictions = []
         for i in range(0, len(batch_phrases), self.batch_size):
             batch_texts = [x[0] for x in batch_phrases[i: i + self.batch_size]]
-            batch_preds = lac.run(batch_texts)
+            batch_preds = self.lac.run(batch_texts)
             predictions.extend(batch_preds)
         candidates = []
         for i in range(len(predictions)):
