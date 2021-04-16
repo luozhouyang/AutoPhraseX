@@ -2,10 +2,12 @@ import json
 import logging
 import os
 import random
+from copy import deepcopy
 
 from sklearn.ensemble import RandomForestClassifier
 
 from . import utils
+from .callbacks import CallbackWrapper
 from .composer import AbstractFeatureComposer, DefaultFeatureComposer
 from .extractors import EntropyExtractor, IDFExtractor, NgramsExtractor
 from .reader import AbstractCorpusReader, DefaultCorpusReader
@@ -32,37 +34,44 @@ class AutoPhrase:
         self.threshold = 0.4
         self.early_stop = None
 
-    def mine(self, quality_phrase_files, **kwargs):
+    def mine(self, quality_phrase_files, callbacks=None, **kwargs):
+        callback = CallbackWrapper(callbacks=callbacks)
+        callback.begin()
 
+        callback.on_build_quality_phrases_begin(quality_phrase_files)
         quality_phrases = load_quality_phrase_files(quality_phrase_files)
-        logging.info('Load quality phrases finished. There are %d quality phrases in total.', len(quality_phrases))
+        callback.on_build_quality_phrases_end(quality_phrases)
 
+        callback.on_select_frequent_phrases_begin()
         frequent_phrases = self.selector.select(**kwargs)
+        callback.on_select_frequent_phrases_end(frequent_phrases)
 
-        logging.info('Selected %d frequent phrases.', len(frequent_phrases))
-
+        callback.on_organize_phrase_pools_begin(quality_phrases, frequent_phrases)
         initial_pos_pool, initial_neg_pool = self._organize_phrase_pools(quality_phrases, frequent_phrases, **kwargs)
-        logging.info('Size of initial positive pool: %d', len(initial_pos_pool))
-        logging.info('Size of initial negative pool: %d', len(initial_neg_pool))
+        callback.on_organize_phrase_pools_end(initial_pos_pool, initial_neg_pool)
 
         pos_pool, neg_pool = initial_pos_pool, initial_neg_pool
         for epoch in range(kwargs.pop('epochs', 5)):
-            logging.info('Starting to train model at epoch %d ...', epoch + 1)
+            callback.on_epoch_begin(epoch)
+
+            callback.on_epoch_prepare_training_data_begin(epoch)
             x, y = self._prepare_training_data(pos_pool, neg_pool, **kwargs)
+            callback.on_epoch_prepare_training_data_end(epoch, x, y)
+
             self.classifier.fit(x, y)
-            logging.info('Finished to train model at epoch %d', epoch + 1)
 
-            logging.info('Starting to adjust phrase pool...')
-            pos_pool, neg_pool, stop = self._reorganize_phrase_pools(pos_pool, neg_pool, **kwargs)
-            logging.info('Finished to djusted phrase pools. ')
-            logging.info('\t size of positive pool: %d, size of ngeative pool: %d', len(pos_pool), len(neg_pool))
-            if stop:
-                logging.info('Early stopped.')
-                break
+            callback.on_epoch_reorganize_phrase_pools_begin(epoch, pos_pool, neg_pool)
+            pos_pool, neg_pool = self._reorganize_phrase_pools(pos_pool, neg_pool, **kwargs)
+            callback.on_epoch_reorganize_phrase_pools_end(epoch, pos_pool, neg_pool)
 
-        logging.info('Finished to train model!')
+            callback.on_epoch_end(epoch)
+
+        callback.on_predict_neg_pool_begin(neg_pool)
         predictions = self._predict_proba(initial_neg_pool)
         predictions = sorted(predictions, key=lambda x: x[1], reverse=True)
+        callback.on_predict_neg_pool_end(predictions)
+
+        callback.end()
         return predictions
 
     def _prepare_training_data(self, pos_pool, neg_pool, **kwargs):
@@ -81,11 +90,11 @@ class AutoPhrase:
 
     def _reorganize_phrase_pools(self, pos_pool, neg_pool, **kwargs):
         new_pos_pool, new_neg_pool = [], []
-        new_pos_pool.extend(pos_pool.clone())
+        new_pos_pool.extend(deepcopy(pos_pool))
 
         pairs = self._predict_proba(neg_pool)
         pairs = sorted(pairs, key=lambda x: x[1], reverse=True)
-        print(pairs[:10])
+        # print(pairs[:10])
 
         for idx, (p, prob) in enumerate(pairs):
             if prob > self.threshold:
@@ -98,11 +107,14 @@ class AutoPhrase:
     def _organize_phrase_pools(self, quality_phrases, frequent_phrases, **kwargs):
         pos_pool, neg_pool = [], []
         for p in frequent_phrases:
+            if p in quality_phrases:
+                pos_pool.append(p)
+                continue
             _p = ''.join(p.split(' '))
             if _p in quality_phrases:
                 pos_pool.append(p)
-            else:
-                neg_pool.append(p)
+                continue
+            neg_pool.append(p)
         return pos_pool, neg_pool
 
     def _predict_proba(self, phrases):
