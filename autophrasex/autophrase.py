@@ -8,11 +8,8 @@ from sklearn.ensemble import RandomForestClassifier
 
 from . import utils
 from .callbacks import CallbackWrapper
-from .composer import AbstractFeatureComposer, DefaultFeatureComposer
-from .extractors import EntropyExtractor, IDFExtractor, NgramsExtractor
-from .reader import AbstractCorpusReader, DefaultCorpusReader
-from .selector import AbstractPhraseSelector, DefaultPhraseSelector
-from .tokenizer import BaiduLacTokenizer
+from .composer import AbstractFeatureComposer
+from .selector import AbstractPhraseSelector
 
 
 def load_quality_phrase_files(input_files):
@@ -31,16 +28,48 @@ class AutoPhrase:
                  selector: AbstractPhraseSelector,
                  composer: AbstractFeatureComposer,
                  threshold=0.4,
+                 n_estimators=100,
+                 max_depth=6,
+                 n_jobs=4,
                  **kwargs):
+        """Constractor
+
+        Args:
+            selector: Instance of AbstractPhraseSelector, used to select frequent phrases
+            composer: Instance of AbstractFeatureComposer, used to compose training features for classifier
+            threshold: Python float, negative phrase whose prob greater than this will be moved to positive pool
+            n_estimator: Python integer, hparam of classifier
+            max_depth: Python integer, hparam of classifier
+            n_jobs: Python integer, hparam of classifier
+        """
         self.selector = selector
         self.composer = composer
-        self.classifier = RandomForestClassifier(**kwargs)
+        self.classifier = RandomForestClassifier(
+            n_estimators=n_estimators, max_depth=max_depth, n_jobs=n_jobs, **kwargs)
         # used by ThresholdSchedule
         self.threshold = threshold
         # used by EarlyStopping
         self.early_stop = False
 
-    def mine(self, quality_phrase_files, callbacks=None, **kwargs):
+    def mine(self,
+             quality_phrase_files,
+             epochs=10,
+             callbacks=None,
+             topk=300,
+             filter_fn=None,
+             **kwargs):
+        """Mining phrase from corpus.
+
+        Args:
+            quality_phrase_files: File path(s) of quality phrases, one phrase each line
+            epochs: Python integer, Number of training epoch
+            callbacks: List of Callback, used to listen lifecycles
+            topk: Python integer, Number of frequent phrases selected from Selector
+            filter_fn: Python callable, with signature fn(phrase, freq), used to filter phrases
+
+        Return:
+            predictions: List of tuple (phrase, prob), predict from initial negative phrase pool
+        """
         callback = CallbackWrapper(callbacks=callbacks)
         callback.begin()
 
@@ -49,7 +78,7 @@ class AutoPhrase:
         callback.on_build_quality_phrases_end(quality_phrases)
 
         callback.on_select_frequent_phrases_begin()
-        frequent_phrases = self.selector.select(**kwargs)
+        frequent_phrases = self.selector.select(topk=topk, filter_fn=filter_fn, **kwargs)
         callback.on_select_frequent_phrases_end(frequent_phrases)
 
         callback.on_organize_phrase_pools_begin(quality_phrases, frequent_phrases)
@@ -57,7 +86,7 @@ class AutoPhrase:
         callback.on_organize_phrase_pools_end(initial_pos_pool, initial_neg_pool)
 
         pos_pool, neg_pool = initial_pos_pool, initial_neg_pool
-        for epoch in range(kwargs.pop('epochs', 5)):
+        for epoch in range(epochs):
             callback.on_epoch_begin(epoch)
 
             callback.on_epoch_prepare_training_data_begin(epoch)
