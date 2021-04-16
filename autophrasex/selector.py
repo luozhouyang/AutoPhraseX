@@ -53,7 +53,7 @@ class DefaultPhraseSelector(AbstractPhraseSelector):
         if drop_verb:
             candidates = self._drop_verbs(candidates)
         candidates = sorted(candidates, key=lambda x: x[1], reverse=True)
-        phrases = [x[0] for x in candidates[:self.phrase_max_count]]
+        phrases = [x[0] for x in candidates[:topk]]
         return phrases
 
     def _drop_verbs(self, candidates):
