@@ -7,6 +7,7 @@
 
 Automated Phrase Mining from Massive Text Corpora in Python.
 
+
 实现思路参考 [shangjingbo1226/AutoPhrase](https://github.com/shangjingbo1226/AutoPhrase)，并不完全一致。
 
 ## 安装
@@ -18,26 +19,46 @@ pip install -U autophrasex
 ## 使用
 
 ```python
-from autophrasex import AutoPhrase, BaiduLacTokenizer, Strategy
+from autophrasex import AutoPhrase, BaiduLacTokenizer
+from autophrasex import NgramsExtractor, IDFExtractor, EntropyExtractor
+from autophrasex import DefaultCorpusReader, DefaultPhraseSelector, DefaultFeatureComposer
+from autophrasex import LoggingCallback, ConstantThresholdScheduler, EarlyStopping
 
-tokenizer = BaiduLacTokenizer()
-strategy = Strategy(
-    tokenizer=tokenizer,
-    N=4,
-    threshold=0.45,
-    threshold_schedule_factor=1.0)
 
-autophrase = AutoPhrase()
+# 构造需要抽取的特征
+N = 4
+ngrams_extractor = NgramsExtractor(n=N)
+idf_extractor = IDFExtractor()
+entropy_extractor = EntropyExtractor()
+
+# 读取语料，处理语料&统计信息
+reader = DefaultCorpusReader(
+    tokenizer=BaiduLacTokenizer(),
+    extractors=[ngrams_extractor, idf_extractor, entropy_extractor])
+reader.read(corpus_files=['data/DBLP.5K.txt'], N=N, verbose=True, logsteps=500)
+
+# 构造AutoPhrase，短语选择&特征构造
+autophrase = AutoPhrase(
+    selector=DefaultPhraseSelector(ngrams_extractor=ngrams_extractor),
+    composer=DefaultFeatureComposer(idf_extractor, ngrams_extractor, entropy_extractor),
+)
+
+# 开始挖掘
 predictions = autophrase.mine(
-    input_doc_files=['/path/to/doc/files'],
-    quality_phrase_files=['/path/to/quality/phrase'],
-    strategy=strategy,
-    N=4,
-    epochs=10)
+    quality_phrase_files='data/wiki_quality.txt',
+    callbacks=[
+        LoggingCallback(),
+        ConstantThresholdScheduler(autophrase),
+        EarlyStopping(autophrase, patience=2, min_delta=3)
+    ])
 
+# 输出挖掘结果
 for pred in predictions:
     print(pred)
+
 ```
+
+本项目的各个关键步骤都是可以扩展的，所以大家可以自由实现自己的逻辑。
 
 ## 结果示例
 
