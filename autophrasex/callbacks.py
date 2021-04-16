@@ -152,7 +152,7 @@ class LoggingCallback(Callback):
         logging.info('    size of initial negative pool: %d', len(neg_pool))
 
     def on_epoch_begin(self, epoch):
-        logging.info('Begin epoch: %d', epoch)
+        logging.info('Starting epoch: %d', epoch)
 
     def on_epoch_prepare_training_data_begin(self, epoch):
         pass
@@ -179,3 +179,42 @@ class LoggingCallback(Callback):
 
     def end(self):
         logging.info('Finished to mine phrases. Done!')
+
+
+class StateCallback(Callback):
+
+    def __init__(self, autophrase, **kwargs):
+        super().__init__()
+        self.autophrase = autophrase
+
+
+class ConstantThresholdScheduler(StateCallback):
+
+    def __init__(self, autophrase, **kwargs):
+        super().__init__(autophrase)
+
+    def on_epoch_begin(self, epoch):
+        pass
+
+    def on_epoch_end(self, epoch):
+        pass
+
+
+class EarlyStopping(StateCallback):
+
+    def __init__(self, autophrase, patience=1, min_delta=3, **kwargs):
+        super().__init__(autophrase)
+        self.patience = patience
+        self.min_delta = min_delta
+        self.prev_pos_pool_size = 0
+        self.curr_pos_pool_size = 0
+
+    def on_epoch_reorganize_phrase_pools_begin(self, epoch, pos_pool, neg_pool):
+        self.prev_pos_pool_size = len(pos_pool)
+
+    def on_epoch_reorganize_phrase_pools_end(self, epoch, pos_pool, neg_pool):
+        self.curr_pos_pool_size = len(pos_pool)
+        if self.curr_pos_pool_size - self.prev_pos_pool_size < self.min_delta:
+            self.patience -= 1
+        if self.patience == 0:
+            self.autophrase.early_stop = True

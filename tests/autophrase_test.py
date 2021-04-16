@@ -4,7 +4,8 @@ import unittest
 import jieba
 from autophrasex import utils
 from autophrasex.autophrase import AutoPhrase
-from autophrasex.callbacks import LoggingCallback
+from autophrasex.callbacks import (ConstantThresholdScheduler, EarlyStopping,
+                                   LoggingCallback)
 from autophrasex.composer import DefaultFeatureComposer
 from autophrasex.extractors import *
 from autophrasex.reader import DefaultCorpusReader
@@ -32,7 +33,11 @@ class AutoPhraseTest(unittest.TestCase):
 
         predictions = autophrase.mine(
             quality_phrase_files='data/wiki_quality.txt',
-            callbacks=[LoggingCallback()])
+            callbacks=[
+                LoggingCallback(),
+                ConstantThresholdScheduler(autophrase),
+                EarlyStopping(autophrase, patience=1, min_delta=3)
+            ])
         for pred in predictions:
             print(pred)
 

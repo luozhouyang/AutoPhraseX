@@ -27,12 +27,18 @@ def load_quality_phrase_files(input_files):
 
 class AutoPhrase:
 
-    def __init__(self, selector: AbstractPhraseSelector, composer: AbstractFeatureComposer, **kwargs):
+    def __init__(self,
+                 selector: AbstractPhraseSelector,
+                 composer: AbstractFeatureComposer,
+                 threshold=0.4,
+                 **kwargs):
         self.selector = selector
         self.composer = composer
         self.classifier = RandomForestClassifier(**kwargs)
-        self.threshold = 0.4
-        self.early_stop = None
+        # used by ThresholdSchedule
+        self.threshold = threshold
+        # used by EarlyStopping
+        self.early_stop = False
 
     def mine(self, quality_phrase_files, callbacks=None, **kwargs):
         callback = CallbackWrapper(callbacks=callbacks)
@@ -63,6 +69,10 @@ class AutoPhrase:
             callback.on_epoch_reorganize_phrase_pools_begin(epoch, pos_pool, neg_pool)
             pos_pool, neg_pool = self._reorganize_phrase_pools(pos_pool, neg_pool, **kwargs)
             callback.on_epoch_reorganize_phrase_pools_end(epoch, pos_pool, neg_pool)
+
+            if self.early_stop:
+                logging.info('    early stop!')
+                break
 
             callback.on_epoch_end(epoch)
 
