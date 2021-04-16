@@ -13,7 +13,7 @@ from .selector import AbstractPhraseSelector, DefaultPhraseSelector
 from .tokenizer import BaiduLacTokenizer, JiebaTokenizer
 
 __name__ = 'autophrasex'
-__version__ = '0.1.1'
+__version__ = '0.2.0'
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)7s %(filename)20s %(lineno)4d] %(message)s",
