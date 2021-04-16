@@ -3,8 +3,8 @@ import logging
 import os
 
 from . import utils
-from .callbacks import (CallbackWrapper, EntropyCallback, IDFCallback,
-                        NgramsCallback)
+from .extractors import (EntropyExtractor, ExtractorCallbackWrapper,
+                         IDFExtractor, NgramsExtractor)
 from .tokenizer import AbstractTokenizer
 
 
@@ -40,24 +40,24 @@ def read_corpus_files(input_files, callback, verbose=True, logsteps=100, **kwarg
 
 class DefaultCorpusReader(AbstractCorpusReader):
 
-    def __init__(self, tokenizer: AbstractTokenizer, callbacks=None):
+    def __init__(self, tokenizer: AbstractTokenizer, extractors=None):
         super().__init__()
-        self.callback = CallbackWrapper(callbacks=callbacks)
+        self.extractor = ExtractorCallbackWrapper(extractors=extractors)
         self.tokenizer = tokenizer
 
     def read(self, corpus_files, N=4, verbose=True, logsteps=100, **kwargs):
 
         def read_line(line):
             # callbacks process doc begin
-            self.callback.on_process_doc_begin()
+            self.extractor.on_process_doc_begin()
             tokens = self.tokenizer.tokenize(line, **kwargs)
             # callbacks process tokens
-            self.callback.update_tokens(tokens, **kwargs)
+            self.extractor.update_tokens(tokens, **kwargs)
             # callbacks process ngrams
             for n in range(1, N + 1):
                 for (start, end), window in utils.ngrams(tokens, n=n):
-                    self.callback.update_ngrams(start, end, window, n, **kwargs)
+                    self.extractor.update_ngrams(start, end, window, n, **kwargs)
             # callbacks process doc end
-            self.callback.on_process_doc_end()
+            self.extractor.on_process_doc_end()
 
         read_corpus_files(corpus_files, callback=read_line, verbose=verbose, logsteps=logsteps, **kwargs)

@@ -25,7 +25,7 @@ def default_ngram_filter_fn(ngrams):
     return False
 
 
-class AbstractCallback(abc.ABC):
+class AbstractExtractorCallback(abc.ABC):
 
     def on_process_doc_begin(self):
         pass
@@ -40,29 +40,29 @@ class AbstractCallback(abc.ABC):
         pass
 
 
-class CallbackWrapper(AbstractCallback):
+class ExtractorCallbackWrapper(AbstractExtractorCallback):
 
-    def __init__(self, callbacks=None):
-        self.callbacks = callbacks or []
+    def __init__(self, extractors=None):
+        self.extractor = extractors or []
 
     def on_process_doc_begin(self):
-        for cb in self.callbacks:
+        for cb in self.extractor:
             cb.on_process_doc_begin()
 
     def update_tokens(self, tokens, **kwargs):
-        for cb in self.callbacks:
+        for cb in self.extractor:
             cb.update_tokens(tokens, **kwargs)
 
     def update_ngrams(self, start, end, ngram, n, **kwargs):
-        for cb in self.callbacks:
+        for cb in self.extractor:
             cb.update_ngrams(start, end, ngram, n, **kwargs)
 
     def on_process_doc_end(self):
-        for cb in self.callbacks:
+        for cb in self.extractor:
             cb.on_process_doc_end()
 
 
-class NgramsCallback(AbstractCallback):
+class NgramsExtractor(AbstractExtractorCallback):
 
     def __init__(self, n=4, ngram_filter_fn=None, epsilon=0.0, **kwargs):
         self.epsilon = epsilon
@@ -107,7 +107,7 @@ class NgramsCallback(AbstractCallback):
         return pmi
 
 
-class IDFCallback(AbstractCallback):
+class IDFExtractor(AbstractExtractorCallback):
 
     def __init__(self, ngram_filter_fn=None, epsilon=0.0):
         self.n_docs = 0
@@ -155,7 +155,7 @@ class IDFCallback(AbstractCallback):
         return math.log((self.n_docs + self.epsilon) / (self.docs_freq.get(ngram, 0) + self.epsilon))
 
 
-class EntropyCallback(AbstractCallback):
+class EntropyExtractor(AbstractExtractorCallback):
 
     def __init__(self, ngram_filter_fn=None, epsilon=0.0):
         self.epsilon = epsilon

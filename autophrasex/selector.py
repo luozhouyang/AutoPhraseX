@@ -1,7 +1,7 @@
 import abc
 
 from . import utils
-from .callbacks import NgramsCallback
+from .extractors import NgramsExtractor
 
 
 class AbstractPhraseSelector(abc.ABC):
@@ -14,9 +14,9 @@ class AbstractPhraseSelector(abc.ABC):
 class DefaultPhraseSelector(AbstractPhraseSelector):
     """Frequent phrases selector."""
 
-    def __init__(self, ngrams_callback: NgramsCallback):
+    def __init__(self, ngrams_extractor: NgramsExtractor):
         super().__init__()
-        self.ngrams_callback = ngrams_callback
+        self.ngrams_extractor = ngrams_extractor
 
     def select(self, topk=300, drop_stopwords=True, min_freq=3, min_len=2, drop_verb=False, filter_fn=None, **kwargs):
         """Select topk frequent phrases.
@@ -30,11 +30,11 @@ class DefaultPhraseSelector(AbstractPhraseSelector):
             filter_fn: Python callable, use custom filters to select phrases, signature is filter_fn(phrase, freq) 
 
         Returns:
-            phrases: Python list, selected frequent phrases from NgramsCallback
+            phrases: Python list, selected frequent phrases from NgramsExtractor
         """
         candidates = []
-        for n in range(1, self.ngrams_callback.N + 1):
-            counter = self.ngrams_callback.ngrams_freq[n]
+        for n in range(1, self.ngrams_extractor.N + 1):
+            counter = self.ngrams_extractor.ngrams_freq[n]
             for phrase, count in counter.items():
                 # filter low freq phrase
                 if count < min_freq:

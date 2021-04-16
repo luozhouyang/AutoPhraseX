@@ -6,8 +6,8 @@ import random
 from sklearn.ensemble import RandomForestClassifier
 
 from . import utils
-from .callbacks import EntropyCallback, IDFCallback, NgramsCallback
 from .composer import AbstractFeatureComposer, DefaultFeatureComposer
+from .extractors import EntropyExtractor, IDFExtractor, NgramsExtractor
 from .reader import AbstractCorpusReader, DefaultCorpusReader
 from .selector import AbstractPhraseSelector, DefaultPhraseSelector
 from .tokenizer import BaiduLacTokenizer

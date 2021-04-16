@@ -1,6 +1,6 @@
 import abc
 
-from .callbacks import EntropyCallback, IDFCallback, NgramsCallback
+from .extractors import EntropyExtractor, IDFExtractor, NgramsExtractor
 
 
 class AbstractFeatureComposer(abc.ABC):
@@ -21,27 +21,27 @@ class AbstractFeatureComposer(abc.ABC):
 class DefaultFeatureComposer(abc.ABC):
 
     def __init__(self,
-                 idf_callback: IDFCallback,
-                 ngrams_callbak: NgramsCallback,
-                 entropy_callback: EntropyCallback):
+                 idf_extractor: IDFExtractor,
+                 ngrams_extractor: NgramsExtractor,
+                 entropy_extractor: EntropyExtractor):
         super().__init__()
-        self.idf_callback = idf_callback
-        self.ngrams_callback = ngrams_callbak
-        self.entropy_callback = entropy_callback
+        self.idf_extractor = idf_extractor
+        self.ngrams_extractor = ngrams_extractor
+        self.entropy_extractor = entropy_extractor
 
     def compose(self, phrase, **kwargs):
         ngrams = phrase.split(' ')
-        counter = self.ngrams_callback.ngrams_freq[len(ngrams)]
+        counter = self.ngrams_extractor.ngrams_freq[len(ngrams)]
         freq = counter[' '.join(ngrams)] / sum(counter.values())
 
         features = {
             'unigram': 1 if len(ngrams) == 1 else 0,
             'term_freq': freq,
-            'doc_freq': self.idf_callback.doc_freq_of(phrase) / self.idf_callback.n_docs,
-            'idf': self.idf_callback.idf_of(phrase),
-            'pmi': self.ngrams_callback.pmi_of(phrase),
-            'le': self.entropy_callback.left_entropy_of(phrase),
-            're': self.entropy_callback.right_entropy_of(phrase),
+            'doc_freq': self.idf_extractor.doc_freq_of(phrase) / self.idf_extractor.n_docs,
+            'idf': self.idf_extractor.idf_of(phrase),
+            'pmi': self.ngrams_extractor.pmi_of(phrase),
+            'le': self.entropy_extractor.left_entropy_of(phrase),
+            're': self.entropy_extractor.right_entropy_of(phrase),
         }
         return self._convert_to_example(features)
 
