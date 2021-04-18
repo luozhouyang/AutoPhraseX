@@ -19,15 +19,12 @@ pip install -U autophrasex
 ## 使用
 
 ```python
-from autophrasex import AutoPhrase, BaiduLacTokenizer
-from autophrasex import NgramsExtractor, IDFExtractor, EntropyExtractor
-from autophrasex import DefaultCorpusReader, DefaultPhraseSelector, DefaultFeatureComposer
-from autophrasex import LoggingCallback, ConstantThresholdScheduler, EarlyStopping
+from autophrasex import *
 
 
 # 构造需要抽取的特征
 N = 4
-ngrams_extractor = NgramsExtractor(n=N)
+ngrams_extractor = NgramsExtractor(N=N)
 idf_extractor = IDFExtractor()
 entropy_extractor = EntropyExtractor()
 
