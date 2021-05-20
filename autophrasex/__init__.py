@@ -3,7 +3,6 @@ import logging
 from .autophrase import AutoPhrase
 from .callbacks import (Callback, ConstantThresholdScheduler, EarlyStopping,
                         LoggingCallback, StateCallback)
-from .composer import AbstractFeatureComposer, DefaultFeatureComposer
 from .extractors import EntropyExtractor, IDFExtractor, NgramsExtractor
 from .filters import (AbstractPhraseFilter, PhraseFilterWrapper,
                       VerbPhraseFilter)
