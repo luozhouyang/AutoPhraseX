@@ -4,11 +4,10 @@ from .autophrase import AutoPhrase
 from .callbacks import (Callback, ConstantThresholdScheduler, EarlyStopping,
                         LoggingCallback, StateCallback)
 from .extractors import EntropyExtractor, IDFExtractor, NgramsExtractor
-from .filters import (AbstractPhraseFilter, PhraseFilterWrapper,
-                      VerbPhraseFilter)
 from .reader import (AbstractCorpusReadCallback, AbstractCorpusReader,
                      DefaultCorpusReader)
-from .selector import AbstractPhraseSelector, DefaultPhraseSelector
+from .selector import (AbstractPhraseFilter, AbstractPhraseSelector,
+                       DefaultPhraseSelector)
 from .tokenizer import BaiduLacTokenizer, JiebaTokenizer
 
 __name__ = 'autophrasex'
