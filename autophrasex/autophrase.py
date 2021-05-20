@@ -81,12 +81,14 @@ class AutoPhrase:
         callback = CallbackWrapper(callbacks=callbacks)
         callback.begin()
 
+        callback.on_read_corpus_begin()
         self.corpus_reader.read(
             corpus_files=corpus_files,
             extractor=self.extractor_wrapper,
             N=N,
             verbose=kwargs.get('verbose', True),
             logsteps=kwargs.get('logsteps', 1000))
+        callback.on_read_corpus_end()
 
         callback.on_build_quality_phrases_begin(quality_phrase_files)
         quality_phrases = load_quality_phrase_files(quality_phrase_files)

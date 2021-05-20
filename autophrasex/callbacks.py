@@ -7,6 +7,12 @@ class Callback(abc.ABC):
     def begin(self):
         pass
 
+    def on_read_corpus_begin(self):
+        pass
+
+    def on_read_corpus_end(self):
+        pass
+
     def on_build_quality_phrases_begin(self, quality_file):
         pass
 
@@ -62,6 +68,14 @@ class CallbackWrapper(Callback):
     def begin(self):
         for cb in self.callbacks:
             cb.begin()
+
+    def on_read_corpus_begin(self):
+        for cb in self.callbacks:
+            cb.on_read_corpus_begin()
+
+    def on_read_corpus_end(self):
+        for cb in self.callbacks:
+            cb.on_read_corpus_end()
 
     def on_build_quality_phrases_begin(self, quality_file):
         for cb in self.callbacks:
@@ -128,6 +142,12 @@ class LoggingCallback(Callback):
 
     def begin(self):
         logging.info('Starting to mining phrases...')
+
+    def on_read_corpus_begin(self):
+        logging.info('Starting to read corpus...')
+
+    def on_read_corpus_end(self):
+        logging.info('Finished to read corpus.')
 
     def on_build_quality_phrases_begin(self, quality_file):
         pass
