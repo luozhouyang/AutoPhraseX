@@ -4,11 +4,11 @@ from .autophrase import AutoPhrase
 from .callbacks import (Callback, ConstantThresholdScheduler, EarlyStopping,
                         LoggingCallback, StateCallback)
 from .composer import AbstractFeatureComposer, DefaultFeatureComposer
-from .extractors import (AbstractExtractorCallback, EntropyExtractor,
-                         IDFExtractor, NgramsExtractor)
+from .extractors import EntropyExtractor, IDFExtractor, NgramsExtractor
 from .filters import (AbstractPhraseFilter, PhraseFilterWrapper,
                       VerbPhraseFilter)
-from .reader import AbstractCorpusReader, DefaultCorpusReader
+from .reader import (AbstractCorpusReadCallback, AbstractCorpusReader,
+                     DefaultCorpusReader)
 from .selector import AbstractPhraseSelector, DefaultPhraseSelector
 from .tokenizer import BaiduLacTokenizer, JiebaTokenizer
 

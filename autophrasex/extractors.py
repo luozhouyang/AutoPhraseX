@@ -8,6 +8,7 @@ from functools import reduce
 from operator import mul
 
 from . import utils
+from .reader import AbstractCorpusReadCallback
 
 CHINESE_PATTERN = re.compile(r'^[0-9a-zA-Z\u4E00-\u9FA5]+$')
 
@@ -25,40 +26,24 @@ def default_ngram_filter_fn(ngrams):
     return False
 
 
-class AbstractExtractorCallback(abc.ABC):
+class AbstractFeatureExtractor(abc.ABC):
 
-    def on_process_doc_begin(self):
-        """Starting to process a doc"""
-        pass
-
-    def update_tokens(self, tokens, **kwargs):
-        """Process tokens, tokenized from current doc.
-
-        Args:
-            tokens: List of string, all tokens tokenized from doc
-        """
-        pass
-
-    def update_ngrams(self, start, end, ngram, n, **kwargs):
-        """Process ngrams.
-
-        Args:
-            start: Python integer, start index of this ngram in the whole token list
-            end: Python integer, end index of this ngram in the whole token list
-            ngram: Python tuple, ngram tokens
-            n: Python integer, N of n-grams
-        """
-        pass
-
-    def on_process_doc_end(self):
-        """Finished to process a document"""
-        pass
+    @abc.abstractmethod
+    def extract(self, inputs, **kwargs):
+        raise NotImplementedError()
 
 
-class ExtractorCallbackWrapper(AbstractExtractorCallback):
+class FeatureExtractorWrapper(AbstractCorpusReadCallback, AbstractFeatureExtractor):
 
     def __init__(self, extractors=None):
+        super().__init__()
         self.extractor = extractors or []
+
+    def extract(self, inputs, **kwargs):
+        features = {}
+        for e in self.extractor:
+            features.update(e.extract(inputs, **kwargs))
+        return features
 
     def on_process_doc_begin(self):
         for cb in self.extractor:
@@ -77,9 +62,10 @@ class ExtractorCallbackWrapper(AbstractExtractorCallback):
             cb.on_process_doc_end()
 
 
-class NgramsExtractor(AbstractExtractorCallback):
+class NgramsExtractor(AbstractCorpusReadCallback, AbstractFeatureExtractor):
 
     def __init__(self, N=4, ngram_filter_fn=None, epsilon=0.0, **kwargs):
+        super().__init__()
         self.epsilon = epsilon
         self.N = N
         self.ngrams_freq = {n: Counter() for n in range(1, self.N + 1)}
@@ -89,6 +75,12 @@ class NgramsExtractor(AbstractExtractorCallback):
         if self.ngram_filter_fn(ngram):
             return
         self.ngrams_freq[n][' '.join(ngram)] += 1
+
+    def extract(self, phrase, **kwargs):
+        features = {
+            'pmi': self.pmi_of(phrase)
+        }
+        return features
 
     def pmi_of(self, phrase):
         """Get the PMI of phrase.
@@ -122,9 +114,10 @@ class NgramsExtractor(AbstractExtractorCallback):
         return pmi
 
 
-class IDFExtractor(AbstractExtractorCallback):
+class IDFExtractor(AbstractCorpusReadCallback, AbstractFeatureExtractor):
 
     def __init__(self, ngram_filter_fn=None, epsilon=0.0):
+        super().__init__()
         self.n_docs = 0
         self.docs_freq = Counter()
         self.ngram_in_doc = None
@@ -146,6 +139,13 @@ class IDFExtractor(AbstractExtractorCallback):
     def on_process_doc_end(self):
         for gram in self.ngram_in_doc:
             self.docs_freq[gram] += 1
+
+    def extract(self, phrase, **kwargs):
+        features = {
+            'doc_freq': self.doc_freq_of(phrase),
+            'idf': self.idf_of(phrase)
+        }
+        return features
 
     def doc_freq_of(self, phrase):
         """Get doc frequence of phrase.
@@ -170,9 +170,10 @@ class IDFExtractor(AbstractExtractorCallback):
         return math.log((self.n_docs + self.epsilon) / (self.docs_freq.get(phrase, 0) + self.epsilon))
 
 
-class EntropyExtractor(AbstractExtractorCallback):
+class EntropyExtractor(AbstractCorpusReadCallback, AbstractFeatureExtractor):
 
     def __init__(self, ngram_filter_fn=None, epsilon=1e-8):
+        super().__init__()
         self.epsilon = epsilon
         self.ngram_filter_fn = ngram_filter_fn or default_ngram_filter_fn
         self.ngrams_left_freq = {}
@@ -198,6 +199,13 @@ class EntropyExtractor(AbstractExtractorCallback):
             rc = self.ngrams_right_freq.get(k, Counter())
             rc[self.current_tokens[end]] += 1
             self.ngrams_right_freq[k] = rc
+
+    def extract(self, phrase, **kwargs):
+        features = {
+            'le': self.left_entropy_of(phrase),
+            're': self.right_entropy_of(phrase)
+        }
+        return features
 
     def _entropy(self, c, total):
         entropy = 0.0

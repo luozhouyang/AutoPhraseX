@@ -163,5 +163,11 @@ class AutoPhrase:
         return pairs
 
 
+class AutoPhraseX:
+
+    def mine(self, input_files, extractors, **kwargs):
+        pass
+
+
 if __name__ == "__main__":
     pass
