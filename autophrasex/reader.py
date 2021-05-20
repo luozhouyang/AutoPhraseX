@@ -3,8 +3,6 @@ import logging
 import os
 
 from . import utils
-from .extractors import (EntropyExtractor, FeatureExtractorWrapper,
-                         IDFExtractor, NgramsExtractor)
 from .tokenizer import AbstractTokenizer
 
 
@@ -41,7 +39,7 @@ class AbstractCorpusReadCallback(abc.ABC):
 class AbstractCorpusReader(abc.ABC):
 
     @abc.abstractmethod
-    def read(self, corpus_files, **kwargs):
+    def read(self, corpus_files, *args, **kwargs):
         raise NotImplementedError()
 
 
@@ -70,25 +68,23 @@ def read_corpus_files(input_files, callback, verbose=True, logsteps=100, **kwarg
 
 class DefaultCorpusReader(AbstractCorpusReader):
 
-    def __init__(self, tokenizer: AbstractTokenizer, extractors=None):
+    def __init__(self, tokenizer: AbstractTokenizer):
         super().__init__()
-        self.extractors = extractors or []
-        self.extractor_wrapper = FeatureExtractorWrapper(extractors=extractors)
         self.tokenizer = tokenizer
 
-    def read(self, corpus_files, N=4, verbose=True, logsteps=100, **kwargs):
+    def read(self, corpus_files, extractor, N=4, verbose=True, logsteps=100, **kwargs):
 
         def read_line(line):
             # callbacks process doc begin
-            self.extractor_wrapper.on_process_doc_begin()
+            extractor.on_process_doc_begin()
             tokens = self.tokenizer.tokenize(line, **kwargs)
             # callbacks process tokens
-            self.extractor_wrapper.update_tokens(tokens, **kwargs)
+            extractor.update_tokens(tokens, **kwargs)
             # callbacks process ngrams
             for n in range(1, N + 1):
                 for (start, end), window in utils.ngrams(tokens, n=n):
-                    self.extractor_wrapper.update_ngrams(start, end, window, n, **kwargs)
+                    extractor.update_ngrams(start, end, window, n, **kwargs)
             # callbacks process doc end
-            self.extractor_wrapper.on_process_doc_end()
+            extractor.on_process_doc_end()
 
         read_corpus_files(corpus_files, callback=read_line, verbose=verbose, logsteps=logsteps, **kwargs)
