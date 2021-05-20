@@ -16,7 +16,6 @@ class DefaultPhraseSelector(AbstractPhraseSelector):
     """Frequent phrases selector."""
 
     def __init__(self,
-                 ngrams_extractor: NgramsExtractor,
                  drop_stopwords=True,
                  min_freq=3,
                  min_len=2,
@@ -31,13 +30,12 @@ class DefaultPhraseSelector(AbstractPhraseSelector):
 
         """
         super().__init__()
-        self.ngrams_extractor = ngrams_extractor
         self.drop_stopwords = drop_stopwords
         self.min_freq = min_freq
         self.min_len = min_len
         self.filter = PhraseFilterWrapper(filters=filters)
 
-    def select(self, topk=300, filter_fn=None, **kwargs):
+    def select(self, extractors, topk=300, filter_fn=None, **kwargs):
         """Select topk frequent phrases.
 
         Args:
@@ -47,9 +45,17 @@ class DefaultPhraseSelector(AbstractPhraseSelector):
         Returns:
             phrases: Python list, selected frequent phrases from NgramsExtractor
         """
+        ngrams_extractor = None
+        for e in extractors:
+            if isinstance(e, NgramsExtractor):
+                ngrams_extractor = e
+                break
+        if ngrams_extractor is None:
+            raise ValueError('Must provide an instance of NgramsExtractor!')
+
         candidates = []
-        for n in range(1, self.ngrams_extractor.N + 1):
-            counter = self.ngrams_extractor.ngrams_freq[n]
+        for n in range(1, ngrams_extractor.N + 1):
+            counter = ngrams_extractor.ngrams_freq[n]
             for phrase, count in counter.items():
                 # filter low freq phrase
                 if count < self.min_freq:
