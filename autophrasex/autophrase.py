@@ -36,12 +36,10 @@ class AutoPhrase:
         """Constractor
 
         Args:
+            reader: Instance of AbstractCorpusReader, used to read corpus files
             selector: Instance of AbstractPhraseSelector, used to select frequent phrases
-            composer: Instance of AbstractFeatureComposer, used to compose training features for classifier
+            extractors: List of AbstractFeatureExtractor, used to extract features for classifier
             threshold: Python float, negative phrase whose prob greater than this will be moved to positive pool
-            n_estimator: Python integer, hparam of classifier
-            max_depth: Python integer, hparam of classifier
-            n_jobs: Python integer, hparam of classifier
         """
         self.selector = selector
         self.extractors = extractors or []
@@ -69,6 +67,7 @@ class AutoPhrase:
         """Mining phrase from corpus.
 
         Args:
+            corpus_files: Files of corpus
             quality_phrase_files: File path(s) of quality phrases, one phrase each line
             epochs: Python integer, Number of training epoch
             callbacks: List of Callback, used to listen lifecycles
@@ -188,7 +187,3 @@ class AutoPhrase:
         features = sorted(features.items(), key=lambda x: x[0])
         features = [x[1] for x in features]
         return features
-
-
-if __name__ == "__main__":
-    pass

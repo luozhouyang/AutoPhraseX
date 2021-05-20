@@ -22,7 +22,6 @@ class DefaultPhraseSelector(AbstractPhraseSelector):
                  filters=None):
         """Init.
         Args:
-            ngrams_extractor: Instance of NgramsExtractor
             drop_stopwords: Python boolean, filter stopwords or not.
             min_freq: Python int, min frequence of phrase occur in corpus.
             min_len: Python int, filter shot phrase whose length is less than this.
@@ -39,6 +38,7 @@ class DefaultPhraseSelector(AbstractPhraseSelector):
         """Select topk frequent phrases.
 
         Args:
+            extractors: List of AbstractFeatureExtractor, used to select frequent phrases
             topk: Python int, max number of phrases to select.
             filter_fn: Python callable, use custom filters to select phrases, signature is filter_fn(phrase, freq) 
 
