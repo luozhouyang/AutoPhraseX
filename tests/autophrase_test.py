@@ -6,8 +6,8 @@ from autophrasex import utils
 from autophrasex.autophrase import AutoPhrase
 from autophrasex.callbacks import (ConstantThresholdScheduler, EarlyStopping,
                                    LoggingCallback)
-from autophrasex.composer import DefaultFeatureComposer
-from autophrasex.extractors import *
+from autophrasex.extractors import (EntropyExtractor, IDFExtractor,
+                                    NgramsExtractor)
 from autophrasex.reader import DefaultCorpusReader
 from autophrasex.selector import DefaultPhraseSelector
 from autophrasex.tokenizer import BaiduLacTokenizer, JiebaTokenizer
@@ -17,22 +17,16 @@ class AutoPhraseTest(unittest.TestCase):
 
     def test_autophrase_small(self):
         N = 4
-        ngrams_extractor = NgramsExtractor(N=N)
-        idf_extractor = IDFExtractor()
-        entropy_extractor = EntropyExtractor()
-
-        reader = DefaultCorpusReader(
-            tokenizer=BaiduLacTokenizer(),
-            extractors=[ngrams_extractor, idf_extractor, entropy_extractor])
-        reader.read(corpus_files=['data/answers.10000.txt'], N=N, verbose=True, logsteps=500)
-
         autophrase = AutoPhrase(
-            selector=DefaultPhraseSelector(ngrams_extractor=ngrams_extractor, min_len=3),
-            composer=DefaultFeatureComposer(idf_extractor, ngrams_extractor, entropy_extractor),
+            reader=DefaultCorpusReader(tokenizer=JiebaTokenizer()),
+            selector=DefaultPhraseSelector(min_len=3),
+            extractors=[NgramsExtractor(N=N), IDFExtractor(), EntropyExtractor()]
         )
 
         predictions = autophrase.mine(
+            corpus_files=['data/answers.10000.txt'],
             quality_phrase_files='data/wiki_quality.txt',
+            N=N,
             callbacks=[
                 LoggingCallback(),
                 ConstantThresholdScheduler(autophrase),

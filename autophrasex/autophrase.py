@@ -6,9 +6,11 @@ from copy import deepcopy
 
 from sklearn.ensemble import RandomForestClassifier
 
+from autophrasex.extractors import FeatureExtractorWrapper
+from autophrasex.reader import AbstractCorpusReader
+
 from . import utils
 from .callbacks import CallbackWrapper
-from .composer import AbstractFeatureComposer
 from .selector import AbstractPhraseSelector
 
 
@@ -25,12 +27,11 @@ def load_quality_phrase_files(input_files):
 class AutoPhrase:
 
     def __init__(self,
+                 reader: AbstractCorpusReader,
                  selector: AbstractPhraseSelector,
-                 composer: AbstractFeatureComposer,
+                 extractors=None,
+                 classifier=None,
                  threshold=0.4,
-                 n_estimators=100,
-                 max_depth=6,
-                 n_jobs=4,
                  **kwargs):
         """Constractor
 
@@ -43,16 +44,23 @@ class AutoPhrase:
             n_jobs: Python integer, hparam of classifier
         """
         self.selector = selector
-        self.composer = composer
-        self.classifier = RandomForestClassifier(
-            n_estimators=n_estimators, max_depth=max_depth, n_jobs=n_jobs, **kwargs)
+        self.extractors = extractors or []
+        self.extractor_wrapper = FeatureExtractorWrapper(extractors=self.extractors)
+        self.corpus_reader = reader
+
+        if classifier is None:
+            classifier = RandomForestClassifier(**kwargs)
+        self.classifier = classifier
+
         # used by ThresholdSchedule
         self.threshold = threshold
         # used by EarlyStopping
         self.early_stop = False
 
     def mine(self,
+             corpus_files,
              quality_phrase_files,
+             N=4,
              epochs=10,
              callbacks=None,
              topk=300,
@@ -73,12 +81,23 @@ class AutoPhrase:
         callback = CallbackWrapper(callbacks=callbacks)
         callback.begin()
 
+        self.corpus_reader.read(
+            corpus_files=corpus_files,
+            extractor=self.extractor_wrapper,
+            N=N,
+            verbose=kwargs.get('verbose', True),
+            logsteps=kwargs.get('logsteps', 1000))
+
         callback.on_build_quality_phrases_begin(quality_phrase_files)
         quality_phrases = load_quality_phrase_files(quality_phrase_files)
         callback.on_build_quality_phrases_end(quality_phrases)
 
         callback.on_select_frequent_phrases_begin()
-        frequent_phrases = self.selector.select(topk=topk, filter_fn=filter_fn, **kwargs)
+        frequent_phrases = self.selector.select(
+            extractors=self.extractors,
+            topk=topk,
+            filter_fn=filter_fn,
+            **kwargs)
         callback.on_select_frequent_phrases_end(frequent_phrases)
 
         callback.on_organize_phrase_pools_begin(quality_phrases, frequent_phrases)
@@ -117,9 +136,9 @@ class AutoPhrase:
         x, y = [], []
         examples = []
         for p in pos_pool:
-            examples.append((self.composer.compose(p), 1))
+            examples.append((self._compose_feature(p), 1))
         for p in neg_pool:
-            examples.append((self.composer.compose(p), 0))
+            examples.append((self._compose_feature(p), 0))
         # shuffle
         random.shuffle(examples)
         for _x, _y in examples:
@@ -157,16 +176,16 @@ class AutoPhrase:
         return pos_pool, neg_pool
 
     def _predict_proba(self, phrases):
-        features = [self.composer.compose(x) for x in phrases]
+        features = [self._compose_feature(phrase) for phrase in phrases]
         pos_probs = [prob[1] for prob in self.classifier.predict_proba(features)]
         pairs = [(phrase, prob) for phrase, prob in zip(phrases, pos_probs)]
         return pairs
 
-
-class AutoPhraseX:
-
-    def mine(self, input_files, extractors, **kwargs):
-        pass
+    def _compose_feature(self, phrase):
+        features = self.extractor_wrapper.extract(phrase)
+        features = sorted(features.items(), key=lambda x: x[0])
+        features = [x[1] for x in features]
+        return features
 
 
 if __name__ == "__main__":
