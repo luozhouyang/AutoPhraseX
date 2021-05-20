@@ -15,16 +15,6 @@ CHINESE_PATTERN = re.compile(r'^[0-9a-zA-Z\u4E00-\u9FA5]+$')
 CHARACTERS = set('!"#$%&\'()*+,-./:;?@[\\]^_`{|}~ \t\n\r\x0b\x0c，。？：“”【】「」')
 
 
-def default_ngram_filter_fn(ngrams):
-    if any(x in CHARACTERS for x in ngrams):
-        return True
-    if any(utils.STOPWORDS.contains(x) for x in ngrams):
-        return True
-    if not CHINESE_PATTERN.match(''.join(ngrams)):
-        return True
-    return False
-
-
 class AbstractFeatureExtractor(abc.ABC):
 
     @abc.abstractmethod
@@ -61,17 +51,60 @@ class FeatureExtractorWrapper(AbstractCorpusReadCallback, AbstractFeatureExtract
             cb.on_process_doc_end()
 
 
-class NgramsExtractor(AbstractCorpusReadCallback, AbstractFeatureExtractor):
+class AbstractNgramFiter(abc.ABC):
 
-    def __init__(self, N=4, ngram_filter_fn=None, epsilon=0.0, **kwargs):
+    @abc.abstractmethod
+    def apply(self, ngram, **kwargs):
+        raise NotImplementedError()
+
+
+class NgramFilterWrapper(AbstractNgramFiter):
+
+    def __init__(self, ngram_filters=None) -> None:
         super().__init__()
+        self.filters = ngram_filters or []
+
+    def apply(self, ngram, **kwargs):
+        if not self.filters:
+            return False
+        for f in self.filters:
+            if f.apply(ngram, **kwargs):
+                return True
+        return False
+
+
+class DefaultNgramFilter(AbstractNgramFiter):
+
+    def apply(self, ngram, **kwargs):
+        if any(x in CHARACTERS for x in ngram):
+            return True
+        if any(utils.STOPWORDS.contains(x) for x in ngram):
+            return True
+        if not CHINESE_PATTERN.match(''.join(ngram)):
+            return True
+        return False
+
+
+class NgramFilteringExtractor(AbstractCorpusReadCallback):
+
+    def __init__(self, ngram_filters=None, use_default_ngram_filters=True, **kwargs) -> None:
+        super().__init__()
+        if not ngram_filters and use_default_ngram_filters:
+            self.ngram_filters = NgramFilterWrapper([DefaultNgramFilter()])
+        else:
+            self.ngram_filters = NgramFilterWrapper(ngram_filters)
+
+
+class NgramsExtractor(NgramFilteringExtractor, AbstractFeatureExtractor):
+
+    def __init__(self, N=4, ngram_filters=None, use_default_ngram_filters=True, epsilon=0.0, **kwargs):
+        super().__init__(ngram_filters, use_default_ngram_filters, **kwargs)
         self.epsilon = epsilon
         self.N = N
         self.ngrams_freq = {n: Counter() for n in range(1, self.N + 1)}
-        self.ngram_filter_fn = ngram_filter_fn or default_ngram_filter_fn
 
     def update_ngrams(self, start, end, ngram, n, **kwargs):
-        if self.ngram_filter_fn(ngram):
+        if self.ngram_filters.apply(ngram, **kwargs):
             return
         self.ngrams_freq[n][' '.join(ngram)] += 1
 
@@ -113,15 +146,14 @@ class NgramsExtractor(AbstractCorpusReadCallback, AbstractFeatureExtractor):
         return pmi
 
 
-class IDFExtractor(AbstractCorpusReadCallback, AbstractFeatureExtractor):
+class IDFExtractor(NgramFilteringExtractor, AbstractFeatureExtractor):
 
-    def __init__(self, ngram_filter_fn=None, epsilon=0.0):
-        super().__init__()
+    def __init__(self, ngram_filters=None, use_default_ngram_filters=True, epsilon=0.0, **kwargs):
+        super().__init__(ngram_filters, use_default_ngram_filters, **kwargs)
         self.n_docs = 0
         self.docs_freq = Counter()
         self.ngram_in_doc = None
         self.epsilon = epsilon
-        self.ngram_filter_fn = ngram_filter_fn or default_ngram_filter_fn
 
     def on_process_doc_begin(self):
         self.ngram_in_doc = set()
@@ -130,7 +162,7 @@ class IDFExtractor(AbstractCorpusReadCallback, AbstractFeatureExtractor):
         self.n_docs += 1
 
     def update_ngrams(self, start, end, ngram, n, **kwargs):
-        if self.ngram_filter_fn(ngram):
+        if self.ngram_filters.apply(ngram, **kwargs):
             return
         phrase = ' '.join(list(ngram))
         self.ngram_in_doc.add(phrase)
@@ -169,12 +201,11 @@ class IDFExtractor(AbstractCorpusReadCallback, AbstractFeatureExtractor):
         return math.log((self.n_docs + self.epsilon) / (self.docs_freq.get(phrase, 0) + self.epsilon))
 
 
-class EntropyExtractor(AbstractCorpusReadCallback, AbstractFeatureExtractor):
+class EntropyExtractor(NgramFilteringExtractor, AbstractFeatureExtractor):
 
-    def __init__(self, ngram_filter_fn=None, epsilon=1e-8):
-        super().__init__()
+    def __init__(self, ngram_filters=None, use_default_ngram_filters=True, epsilon=1e-8, **kwargs):
+        super().__init__(ngram_filters, use_default_ngram_filters, **kwargs)
         self.epsilon = epsilon
-        self.ngram_filter_fn = ngram_filter_fn or default_ngram_filter_fn
         self.ngrams_left_freq = {}
         self.ngrams_right_freq = {}
         self.current_tokens = None
@@ -183,7 +214,7 @@ class EntropyExtractor(AbstractCorpusReadCallback, AbstractFeatureExtractor):
         self.current_tokens = tokens
 
     def update_ngrams(self, start, end, ngram, n, **kwargs):
-        if self.ngram_filter_fn(ngram):
+        if self.ngram_filters.apply(ngram, **kwargs):
             return
 
         # left entropy
