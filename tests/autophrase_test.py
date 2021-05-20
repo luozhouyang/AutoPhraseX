@@ -10,7 +10,7 @@ from autophrasex.extractors import (EntropyExtractor, IDFExtractor,
                                     NgramsExtractor)
 from autophrasex.reader import DefaultCorpusReader
 from autophrasex.selector import DefaultPhraseSelector
-from autophrasex.tokenizer import BaiduLacTokenizer, JiebaTokenizer
+from autophrasex.tokenizer import JiebaTokenizer
 
 
 class AutoPhraseTest(unittest.TestCase):

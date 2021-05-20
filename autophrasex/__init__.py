@@ -3,12 +3,13 @@ import logging
 from .autophrase import AutoPhrase
 from .callbacks import (Callback, ConstantThresholdScheduler, EarlyStopping,
                         LoggingCallback, StateCallback)
-from .extractors import EntropyExtractor, IDFExtractor, NgramsExtractor
+from .extractors import (AbstractFeatureExtractor, AbstractNgramFiter,
+                         EntropyExtractor, IDFExtractor, NgramsExtractor)
 from .reader import (AbstractCorpusReadCallback, AbstractCorpusReader,
                      DefaultCorpusReader)
 from .selector import (AbstractPhraseFilter, AbstractPhraseSelector,
                        DefaultPhraseSelector)
-from .tokenizer import BaiduLacTokenizer, JiebaTokenizer
+from .tokenizer import JiebaTokenizer
 
 __name__ = 'autophrasex'
 __version__ = '0.2.0'
