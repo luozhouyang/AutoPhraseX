@@ -72,19 +72,19 @@ class DefaultCorpusReader(AbstractCorpusReader):
         super().__init__()
         self.tokenizer = tokenizer
 
-    def read(self, corpus_files, extractor, N=4, verbose=True, logsteps=100, **kwargs):
+    def read(self, corpus_files, callback, N=4, verbose=True, logsteps=100, **kwargs):
 
         def read_line(line):
             # callbacks process doc begin
-            extractor.on_process_doc_begin()
+            callback.on_process_doc_begin()
             tokens = self.tokenizer.tokenize(line, **kwargs)
             # callbacks process tokens
-            extractor.update_tokens(tokens, **kwargs)
+            callback.update_tokens(tokens, **kwargs)
             # callbacks process ngrams
             for n in range(1, N + 1):
                 for (start, end), window in utils.ngrams(tokens, n=n):
-                    extractor.update_ngrams(start, end, window, n, **kwargs)
+                    callback.update_ngrams(start, end, window, n, **kwargs)
             # callbacks process doc end
-            extractor.on_process_doc_end()
+            callback.on_process_doc_end()
 
         read_corpus_files(corpus_files, callback=read_line, verbose=verbose, logsteps=logsteps, **kwargs)
