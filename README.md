@@ -26,7 +26,7 @@ autophrase = AutoPhrase(
     reader=DefaultCorpusReader(tokenizer=JiebaTokenizer()),
     selector=DefaultPhraseSelector(),
     extractors=[
-        NgramsExtractor(N=N), 
+        NgramsExtractor(N=4), 
         IDFExtractor(), 
         EntropyExtractor()
     ]
@@ -38,8 +38,8 @@ predictions = autophrase.mine(
     quality_phrase_files='data/wiki_quality.txt',
     callbacks=[
         LoggingCallback(),
-        ConstantThresholdScheduler(autophrase),
-        EarlyStopping(autophrase, patience=2, min_delta=3)
+        ConstantThresholdScheduler(),
+        EarlyStopping(patience=2, min_delta=3)
     ])
 
 # 输出挖掘结果
@@ -69,17 +69,15 @@ for pred in predictions:
 
 例如，你可以使用`baidu/LAC`来进行中文分词。你可以这样实现分词器：
 
-```bash
+```python
 # pip install lac
 
 class BaiduLacTokenizer(AbstractTokenizer):
 
     def __init__(self, custom_vocab_path=None, model_path=None, mode='seg', use_cuda=False, **kwargs):
         self.lac = LAC(model_path=model_path, mode=mode, use_cuda=use_cuda)
-        logging.info('LAC initialized successfully.')
         if custom_vocab_path:
             self.lac.load_customization(custom_vocab_path)
-            logging.info('LAC load custom vocab successfully.')
 
     def tokenize(self, text, **kwargs):
         text = self._uniform_text(text, **kwargs)
@@ -185,7 +183,7 @@ autophrase = AutoPhrase(
     reader=DefaultCorpusReader(tokenizer=JiebaTokenizer()),
     selector=DefaultPhraseSelector(),
     extractors=[
-        NgramsExtractor(N=N, ngram_filters=[MyNgramFilter()]), 
+        NgramsExtractor(N=4, ngram_filters=[MyNgramFilter()]), 
         IDFExtractor(ngram_filters=[MyNgramFilter()]), 
         EntropyExtractor(ngram_filters=[MyNgramFilter()]),
     ]
