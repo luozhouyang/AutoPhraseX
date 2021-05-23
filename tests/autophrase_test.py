@@ -29,8 +29,8 @@ class AutoPhraseTest(unittest.TestCase):
             N=N,
             callbacks=[
                 LoggingCallback(),
-                ConstantThresholdScheduler(autophrase),
-                EarlyStopping(autophrase, patience=1, min_delta=3)
+                ConstantThresholdScheduler(),
+                EarlyStopping(patience=1, min_delta=3)
             ])
         for pred in predictions:
             print(pred)

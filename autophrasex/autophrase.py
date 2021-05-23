@@ -10,7 +10,7 @@ from autophrasex.extractors import FeatureExtractorWrapper
 from autophrasex.reader import AbstractCorpusReader
 
 from . import utils
-from .callbacks import CallbackWrapper
+from .callbacks import CallbackWrapper, StateCallback
 from .selector import AbstractPhraseSelector
 
 
@@ -80,10 +80,15 @@ class AutoPhrase:
         callback = CallbackWrapper(callbacks=callbacks)
         callback.begin()
 
+        # setup state callbacks
+        for cb in callbacks:
+            if isinstance(cb, StateCallback):
+                cb.autophrase = self
+
         callback.on_read_corpus_begin()
         self.corpus_reader.read(
-            corpus_files=corpus_files,
-            extractor=self.extractor_wrapper,
+            corpus_files,
+            self.extractor_wrapper,
             N=N,
             verbose=kwargs.get('verbose', True),
             logsteps=kwargs.get('logsteps', 1000))

@@ -202,16 +202,17 @@ class LoggingCallback(Callback):
 
 
 class StateCallback(Callback):
+    """Callback that can access AutoPhrase's inner states."""
 
-    def __init__(self, autophrase, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__()
-        self.autophrase = autophrase
+        self.autophrase = None
 
 
 class ConstantThresholdScheduler(StateCallback):
 
-    def __init__(self, autophrase, **kwargs):
-        super().__init__(autophrase)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def on_epoch_begin(self, epoch):
         pass
@@ -222,8 +223,8 @@ class ConstantThresholdScheduler(StateCallback):
 
 class EarlyStopping(StateCallback):
 
-    def __init__(self, autophrase, patience=1, min_delta=3, **kwargs):
-        super().__init__(autophrase)
+    def __init__(self, patience=1, min_delta=3, **kwargs):
+        super().__init__(**kwargs)
         self.patience = patience
         self.min_delta = min_delta
         self.prev_pos_pool_size = 0
