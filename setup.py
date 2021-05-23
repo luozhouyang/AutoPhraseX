@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="autophrasex",
-    version="0.3.0",
+    version="0.3.1",
     description="Automated Phrase Mining from Massive Text Corpora in Python.",
     long_description=long_description,
     long_description_content_type="text/markdown",
